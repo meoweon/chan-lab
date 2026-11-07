@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Build artifacts
+chan-lab.html
+
+# Local tool memory
+.workbuddy/
+
+# Upstream reference code (copied for porting, not original work)
+reference/
+
+# Archived old files
+archive/
+
+# Generated reports (keep .md, ignore data/logs)
+docs/*.json
+docs/*.log
+docs/report-btcusdt-*.md
+docs/facts-btcusdt-*.md
