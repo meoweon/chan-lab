@@ -51,8 +51,7 @@ D 层真实行情 + 合成数据对照，置换检验统计显著性。
 
 本项目算法参考自以下开源实现：
 
-- [bambuo/mdk](https://github.com/bambuo) — C# 实现，缠论结构链完整
-- [bambuo/chan](https://github.com/bambuo) — Go 实现
+- [bambuo/chan](https://github.com/bambuo/chan) — Go 实现
 - chan-core — Rust 实现（私有仓库，群内分发）
 - chan-cj — 仓颉实现
 
