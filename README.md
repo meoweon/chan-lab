@@ -1,6 +1,6 @@
-# 缠论动态理论实验室
+# 缠论实验室
 
-Chan Theory Dynamic Simulator — 可视化交互的缠论结构生成与验证工具
+Chan Lab — 可视化交互的缠论结构生成与验证工具
 
 ## 项目目标
 
