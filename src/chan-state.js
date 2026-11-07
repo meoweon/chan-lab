@@ -17,6 +17,12 @@
  *       visited  各状态首次进入的回放帧（近似值见注释）
  *       legal    当前时点的合法后续状态 id 集合（含自环）
  *
+ *   终结与失效不是静态判断，而是「实例在本帧消失」的事件：
+ *     笔 撤销  = 上一帧的末笔在本帧整体消失（EnforceGapBackwards 合并）
+ *     中枢 终结 = 上一帧的末中枢本帧不再是末中枢（关闭）或整条消失（重构）
+ *     买卖点 失效 = 上一帧的待定实例本帧既不在待定集合、也没有结算成信号/ghost
+ *   事件只在发生的那一帧呈现（下一帧起跟踪新实例），因此 track 仍是纯函数。
+ *
  * 核验口径（与 chan-rules.js 一致）：
  *   confirmed   状态/转移直接对应源码判定（ChanStrokeBuilder / ChanPivotDetector / ChanSignals）
  *   provisional 源码不显式输出、由每帧快照推导（候选 / 待定 / 失效 / 候选期起点等）
@@ -222,11 +228,69 @@ function findDivFrame(snaps, i, gRefGlobal, isUp) {
   return null;
 }
 
+/* 某笔（按 起点+方向 锚定）在各帧上的履历：首现帧 / 稳定帧 / 端点修正次数 / 最后形态 */
+function strokeTrace(snaps, upto, key) {
+  let birth = null, stableF = null, prevEnd = null, corrections = 0, last = null;
+  for (let j = 0; j <= upto; j++) {
+    const oj = snaps[j].off;
+    const hit = snaps[j].res.strokes.find(x => gk(x, oj) === key);
+    if (!hit) continue;
+    last = hit;
+    const ge = hit.endBarIndex + oj;
+    if (birth == null) birth = j;
+    if (prevEnd != null && prevEnd !== ge) corrections++;
+    prevEnd = ge;
+    if (hit.isConfirmed && stableF == null) stableF = j;
+  }
+  return { birth, stableF, corrections, last };
+}
+
+/* 某中枢（按 首笔起点 锚定）在各帧上的履历 */
+function pivotTrace(snaps, upto, key) {
+  let birth = null, extF = null, leftF = null, revises = 0, last = null, prevSig = null;
+  for (let j = 0; j <= upto; j++) {
+    const rj = snaps[j].res, oj = snaps[j].off;
+    for (const q of rj.pivots) {
+      const qa = rj.strokes[q.startStrokeIndex];
+      if (!qa || qa.startBarIndex + oj !== key) continue;
+      last = q;
+      if (birth == null) birth = j;
+      const sig = q.zg + '|' + q.zd;
+      if (prevSig != null && prevSig !== sig) revises++;
+      prevSig = sig;
+      if (q.strokeCount > 3 && extF == null) extF = j;
+      if (q.isConfirmed && leftF == null) leftF = j;
+    }
+  }
+  return { birth, extF, leftF, revises, last };
+}
+
 /* 笔实例：跟踪当前最后一笔（发展中/刚稳定的那笔） */
 function trackStroke(snaps, i) {
   const r = snaps[i].res, off = snaps[i].off;
   const visited = {}, path = [];
   let corrections = 0;
+  /* 撤销：上一帧的末笔在本帧整体消失（EnforceGapBackwards 把它并进更长的笔） */
+  if (i > 0) {
+    const pr = snaps[i - 1].res, po = snaps[i - 1].off;
+    const pl = pr.strokes[pr.strokes.length - 1];
+    if (pl) {
+      const key = gk(pl, po);
+      if (!r.strokes.some(x => gk(x, off) === key)) {
+        const t = strokeTrace(snaps, i, key);
+        const birth = t.birth == null ? i : t.birth;
+        const vs = { candidate: Math.max(0, birth - 1), active: birth };
+        const pa = ['candidate', 'active'];
+        if (t.stableF != null) { vs.stable = t.stableF; pa.push('stable'); }
+        vs.terminated = i; pa.push('terminated');
+        const sh = t.last || pl;
+        return { cur: 'terminated',
+          inst: `笔 ${sh.isUp ? '↑' : '↓'} #${sh.startBarIndex + po}→#${sh.endBarIndex + po} 在 #${i} 被撤销（间隔回退合并，并入更长的笔）`,
+          path: pa, visited: vs, legal: [], corrections: t.corrections,
+          detail: { index: -1, s: sh, off: po } };
+      }
+    }
+  }
   if (!r.strokes.length) {
     visited.candidate = 0;
     return { cur: 'candidate', inst: '尚无笔：等待分型交替、间隔达标', path: ['candidate'], visited, legal: ['active'], corrections, detail: null };
@@ -267,6 +331,35 @@ function trackStroke(snaps, i) {
 function trackPivot(snaps, i) {
   const r = snaps[i].res, off = snaps[i].off;
   const visited = {}, path = [];
+  /* 终结：上一帧的末中枢本帧不再是末中枢（关闭）或整条消失（重构） */
+  if (i > 0) {
+    const pr = snaps[i - 1].res, po = snaps[i - 1].off;
+    const pv = pr.pivots[pr.pivots.length - 1];
+    if (pv) {
+      const a0 = pr.strokes[pv.startStrokeIndex];
+      const key = a0 ? a0.startBarIndex + po : null;
+      if (key != null) {
+        const still = r.pivots.some(q => { const qa = r.strokes[q.startStrokeIndex]; return qa && qa.startBarIndex + off === key; });
+        const curP = r.pivots[r.pivots.length - 1];
+        const ca = curP ? r.strokes[curP.startStrokeIndex] : null;
+        const curKey = ca ? ca.startBarIndex + off : null;
+        if (!still || curKey !== key) {
+          const t = pivotTrace(snaps, i, key);
+          const birth = t.birth == null ? i : t.birth;
+          const vs = { candidate: Math.max(0, birth - 1), formed: birth };
+          const pa = ['candidate', 'formed'];
+          if (t.extF != null) { vs.extending = t.extF; pa.push('extending'); }
+          if (t.leftF != null) { vs.left = t.leftF; pa.push('left'); }
+          vs.terminated = i; pa.push('terminated');
+          const q = t.last || pv;
+          return { cur: 'terminated',
+            inst: `中枢 [${fm2(q.zd)} – ${fm2(q.zg)}] ${q.strokeCount} 笔在 #${i} ${still ? '关闭（离开确认后新结构另起）' : '消失（构成笔被修正，重构）'}`
+              + (t.revises ? `（区间修正 ${t.revises} 次）` : ''),
+            path: pa, visited: vs, legal: [], detail: { p: q, off: po } };
+        }
+      }
+    }
+  }
   if (!r.pivots.length) {
     const st = r.strokes;
     let inst = '尚无中枢：';
@@ -311,28 +404,26 @@ function trackPivot(snaps, i) {
   return { cur, inst, path, visited, legal, detail: { p, off } };
 }
 
-/* 买卖点实例：优先取「条件待定」（最近的未稳定锚点），否则取最近已记账（发出/被过滤） */
-function trackSignal(snaps, i, signals, ghosts) {
-  const r = snaps[i].res, off = snaps[i].off;
+/* 待定实例：某一帧上的「条件待定」集合（身份 = 锚点笔 起点|方向 + 类别）
+ * 锚点笔端点被修正时（#70→#74）身份不变，仍视为同一实例继续等待稳定。 */
+function pendAt(snaps, k, signals, ghosts) {
+  const r = snaps[k].res, off = snaps[k].off;
   const done = [];
-  (signals || []).forEach(x => { if (x.gConfirm <= i) done.push({ x, filtered: false }); });
-  (ghosts || []).forEach(x => { if (x.gConfirm <= i) done.push({ x, filtered: true }); });
-  done.sort((a, b) => a.x.gConfirm - b.x.gConfirm);
-  const doneHas = (kind, gRef) => done.some(d => d.x.kind === kind && d.x.gRef === gRef);
-
-  /* 待定探测：镜像 ChanSignals 口径的只读重推（不重复判定，只为呈现状态） */
-  const pend = [];
+  (signals || []).forEach(x => { if (x.gConfirm <= k) done.push(x); });
+  (ghosts || []).forEach(x => { if (x.gConfirm <= k) done.push(x); });
+  const doneHas = (kind, gRef) => done.some(x => x.kind === kind && x.gRef === gRef);
+  const out = [];
   r.divergences.forEach(d => {                       // 1 类：背驰锚点笔未稳定
     const a = r.strokes[d.leaveIndex]; if (!a || a.isConfirmed) return;
     const kind = d.isUp ? '1卖' : '1买', gRef = a.endBarIndex + off;
     if (doneHas(kind, gRef)) return;
-    pend.push({ kind, gRef, pre: findDivFrame(snaps, i, gRef, d.isUp),
+    out.push({ kind, gRef, anchor: gk(a, off), pre: findDivFrame(snaps, k, gRef, d.isUp),
       why: `中枢离开笔 ${d.leaveIndex} 背驰（面积比 ${d.areaRatio.toFixed(2)}），锚点笔未稳定` });
   });
   r.divergences.forEach(d => {                       // 2 类：1类锚点后「回抽不破」形态已成、锚笔未稳定
-    const k = d.leaveIndex;
-    if (k + 2 >= r.strokes.length) return;
-    const a = r.strokes[k], b = r.strokes[k + 1], c = r.strokes[k + 2];
+    const k0 = d.leaveIndex;
+    if (k0 + 2 >= r.strokes.length) return;
+    const a = r.strokes[k0], b = r.strokes[k0 + 1], c = r.strokes[k0 + 2];
     if (!a || !b || !c || c.isConfirmed) return;
     let kind = null;
     if (!d.isUp && !a.isUp && b.isUp && !c.isUp && c.low > a.low) kind = '2买';
@@ -340,44 +431,82 @@ function trackSignal(snaps, i, signals, ghosts) {
     if (!kind) return;
     const gRef = c.endBarIndex + off;
     if (doneHas(kind, gRef)) return;
-    pend.push({ kind, gRef, pre: firstStrokeFrame(snaps, i, c, off),
-      why: `1类锚点笔 ${k} 后回抽不破形态已成，回抽笔 ${k + 2} 未稳定` });
+    out.push({ kind, gRef, anchor: gk(c, off), pre: firstStrokeFrame(snaps, k, c, off),
+      why: `1类锚点笔 ${k0} 后回抽不破形态已成，回抽笔 ${k0 + 2} 未稳定` });
   });
   r.pivots.forEach(p => {                            // 3 类：已确认中枢后「突破+回抽不回」，回抽笔未稳定
     if (!p.isConfirmed) return;
-    for (let k = p.endStrokeIndex + 1; k + 1 < r.strokes.length; k++) {
-      const leave = r.strokes[k], pull = r.strokes[k + 1];
+    for (let kx = p.endStrokeIndex + 1; kx + 1 < r.strokes.length; kx++) {
+      const leave = r.strokes[kx], pull = r.strokes[kx + 1];
       const buy = leave.isUp && leave.high > p.zg && !pull.isUp && pull.low > p.zg;
       const sell = !leave.isUp && leave.low < p.zd && pull.isUp && pull.high < p.zd;
       if ((!buy && !sell) || pull.isConfirmed) continue;
       const kind = buy ? '3买' : '3卖', gRef = pull.endBarIndex + off;
       if (doneHas(kind, gRef)) continue;
-      pend.push({ kind, gRef, pre: firstStrokeFrame(snaps, i, pull, off),
-        why: `${buy ? `突破 ZG ${fm2(p.zg)}` : `跌破 ZD ${fm2(p.zd)}`}后回抽不回中枢，回抽笔 ${k + 1} 未稳定` });
+      out.push({ kind, gRef, anchor: gk(pull, off), pre: firstStrokeFrame(snaps, k, pull, off),
+        why: `${buy ? `突破 ZG ${fm2(p.zg)}` : `跌破 ZD ${fm2(p.zd)}`}后回抽不回中枢，回抽笔 ${kx + 1} 未稳定` });
     }
   });
+  out.sort((a, b) => a.gRef - b.gRef);
+  return out;
+}
 
-  if (pend.length) {
-    pend.sort((a, b) => b.gRef - a.gRef);
-    const p0 = pend[0];
-    const pre = p0.pre == null ? i : p0.pre;
-    return { cur: 'pending', inst: `${p0.kind} 待定：${p0.why}`, path: ['prereq', 'pending'],
-      visited: { prereq: pre, pending: pre }, legal: ['emitted', 'filtered', 'invalid'], detail: p0 };
+/* 买卖点实例：优先取「条件待定」（最近的未稳定锚点），否则取最近已记账（发出/被过滤） */
+function trackSignal(snaps, i, signals, ghosts) {
+  const r = snaps[i].res, off = snaps[i].off;
+  const pend = pendAt(snaps, i, signals, ghosts);
+  const prevPend = i > 0 ? pendAt(snaps, i - 1, signals, ghosts) : [];
+  const pick = pend.length ? pend[pend.length - 1] : null;
+  const prevPick = prevPend.length ? prevPend[prevPend.length - 1] : null;
+
+  /* 失效：上一帧的待定实例本帧既不在待定集合里，也没有结算成信号/ghost → 前提在稳定前瓦解 */
+  if (prevPick && !pend.some(p => p.anchor === prevPick.anchor && p.kind === prevPick.kind)) {
+    const resolved = [...(signals || []), ...(ghosts || [])].some(x => {
+      if (x.gConfirm > i || x.kind !== prevPick.kind) return false;
+      const s = r.strokes.find(s => s.endBarIndex + off === x.gRef);
+      return !!s && gk(s, off) === prevPick.anchor;
+    });
+    if (!resolved) {
+      const pre = prevPick.pre == null ? Math.max(0, i - 1) : prevPick.pre;
+      return { cur: 'invalid',
+        inst: `${prevPick.kind} 失效：锚点笔在稳定前被修正（原极值 #${prevPick.gRef}），前提消失`,
+        path: ['prereq', 'pending', 'invalid'],
+        visited: { prereq: pre, pending: pre, invalid: i },
+        legal: [], detail: prevPick };
+    }
   }
+
+  if (pick) {
+    const pre = pick.pre == null ? i : pick.pre;
+    return { cur: 'pending', inst: `${pick.kind} 待定：${pick.why}`, path: ['prereq', 'pending'],
+      visited: { prereq: pre, pending: pre }, legal: ['emitted', 'filtered', 'invalid'], detail: pick };
+  }
+
+  const done = [];
+  (signals || []).forEach(x => { if (x.gConfirm <= i) done.push({ x, filtered: false }); });
+  (ghosts || []).forEach(x => { if (x.gConfirm <= i) done.push({ x, filtered: true }); });
+  done.sort((a, b) => a.x.gConfirm - b.x.gConfirm);
   if (done.length) {
     const d = done[done.length - 1], x = d.x;
     const cur = d.filtered ? 'filtered' : 'emitted';
+    const anchorNow = r.strokes.find(s => s.endBarIndex + off === x.gRef);
     let pre = /^1/.test(x.kind) ? findDivFrame(snaps, i, x.gRef, x.side === 'sell') : null;
-    if (pre == null) {                               // 2/3 类：锚点笔出现帧（近似）
-      const anchor = r.strokes.find(s => s.endBarIndex + off === x.gRef);
-      if (anchor) pre = firstStrokeFrame(snaps, i, anchor, off);
-    }
+    if (pre == null && anchorNow) pre = firstStrokeFrame(snaps, i, anchorNow, off);
     if (pre == null) pre = x.gRef;
-    const visited = { prereq: pre, pending: pre };
+    /* 这一条到底是「等稳定后发出」还是「前提成立时锚点已稳定」的直发 */
+    let wasPending = false;
+    if (x.gConfirm > 0) {
+      const pj = x.gConfirm - 1, pr = snaps[pj].res, po = snaps[pj].off;
+      const a0 = pr.strokes.find(s => s.endBarIndex + po === x.gRef);
+      const key0 = a0 ? gk(a0, po) : null;
+      wasPending = !!key0 && pendAt(snaps, pj, signals, ghosts).some(p => p.kind === x.kind && p.anchor === key0);
+    }
+    const path = wasPending ? ['prereq', 'pending', cur] : ['prereq', cur];
+    const visited = wasPending ? { prereq: pre, pending: pre } : { prereq: pre };
     visited[cur] = x.gConfirm;
     const inst = `${x.kind} ${d.filtered ? '被过滤' : '已发出'}：极值 #${x.gRef}（${fm2(x.refPrice)}）→ 记账 #${x.gConfirm} @${fm2(x.price)}`
       + (d.filtered && x.reason ? `（${x.reason}）` : '');
-    return { cur, inst, path: ['prereq', 'pending', cur], visited, legal: [], detail: { x, filtered: d.filtered } };
+    return { cur, inst, path, visited, legal: [], detail: { x, filtered: d.filtered } };
   }
   return { cur: null, inst: '尚无买卖点实例：等待前置聚齐（中枢离开+背驰 / 回抽形态 / 突破回抽）',
     path: [], visited: {}, legal: ['prereq'], detail: null };
@@ -391,7 +520,79 @@ function track(snaps, i, signals, ghosts) {
   };
 }
 
-const api = { MACHINES, LAYOUT, NW, NH, track, _firstStrokeFrame: firstStrokeFrame, _findDivFrame: findDivFrame };
+/* ---------- 最近事件：≤ 播放头的最近一次「下结论」 ----------
+   「当前」总是优先显示最新的待定实例，结论只闪一帧；这里把每一帧的终态事件
+   （已发出 / 被过滤 / 失效 / 笔撤销 / 中枢终结）记下来，供面板回看。
+   逐帧算一次并按 snaps 数组缓存（重建会换数组，缓存自然失效）。 */
+const EV_CACHE = new WeakMap();
+const GHOST = { warmup: '暖机', sublevel: '次级别未确认', untradable: '不可交易' };
+
+function frameEvent(snaps, j, signals, ghosts) {
+  const cur = snaps[j], off = cur.off, r = cur.res;
+  /* 1) 结算：已发出 / 被过滤 */
+  let done = null;
+  (signals || []).forEach(x => { if (x.gConfirm === j) done = { x, filtered: false }; });
+  (ghosts || []).forEach(x => { if (x.gConfirm === j) done = { x, filtered: true }; });
+  if (done) {
+    const x = done.x;
+    const why = done.filtered && x.reason ? `（${GHOST[ x.reason ] || x.reason}）` : '';
+    return { m: 'signal', text: `${x.kind} ${done.filtered ? '被过滤' : '已发出'} @#${j}${why}`, tone: done.filtered ? 'no' : 'ok' };
+  }
+  if (j === 0) return null;
+  const pre = snaps[j - 1], po = pre.off, pr = pre.res;
+  /* 2) 失效：上一帧的待定实例本帧既不在待定集合、也没结算成信号/ghost */
+  const prevPend = pendAt(snaps, j - 1, signals, ghosts);
+  if (prevPend.length) {
+    const pk = prevPend[prevPend.length - 1];
+    const pend = pendAt(snaps, j, signals, ghosts);
+    if (!pend.some(p => p.anchor === pk.anchor && p.kind === pk.kind)) {
+      const resolved = [...(signals || []), ...(ghosts || [])].some(x => {
+        if (x.gConfirm > j || x.kind !== pk.kind) return false;
+        const s = r.strokes.find(s => s.endBarIndex + off === x.gRef);
+        return !!s && gk(s, off) === pk.anchor;
+      });
+      if (!resolved) return { m: 'signal', text: `${pk.kind} 失效（原极值 #${pk.gRef}，前提消失）`, tone: 'no' };
+    }
+  }
+  /* 3) 中枢终结：关闭（新结构另起）/ 消失（构成笔被修正） */
+  const pv = pr.pivots[pr.pivots.length - 1];
+  if (pv) {
+    const a0 = pr.strokes[pv.startStrokeIndex];
+    const key = a0 ? a0.startBarIndex + po : null;
+    const cp = r.pivots[r.pivots.length - 1], ca = cp ? r.strokes[cp.startStrokeIndex] : null;
+    const ckey = ca ? ca.startBarIndex + off : null;
+    if (key != null && ckey !== key) {
+      const how = ckey == null ? '消失（重构）' : '关闭';
+      return { m: 'pivot', short: `中枢${how === '关闭' ? '关闭' : '重构'}`, text: `中枢 [${fm2(pv.zd)}–${fm2(pv.zg)}] ${how}`, tone: 'warn' };
+    }
+  }
+  /* 4) 笔撤销：上一帧的末笔整体消失（间隔回退合并） */
+  const pl = pr.strokes[pr.strokes.length - 1];
+  if (pl && !r.strokes.some(x => gk(x, po) === gk(pl, po))) {
+    return { m: 'stroke', short: `笔${pl.isUp ? '↑' : '↓'}撤销`, text: `笔 ${pl.isUp ? '↑' : '↓'} #${pl.startBarIndex + po}→#${pl.endBarIndex + po} 被撤销`, tone: 'no' };
+  }
+  return null;
+}
+
+/* 取 ≤ i 的最近终态事件：sig = 买卖点的结论（发出/过滤/失效），st = 笔/中枢的终结 */
+function recent(snaps, i, signals, ghosts) {
+  if (!snaps || !snaps.length) return null;
+  const sig = `${(signals || []).length}/${(ghosts || []).length}`;
+  let c = EV_CACHE.get(snaps);
+  if (!c || c.sig !== sig) { c = { sig, arr: [] }; EV_CACHE.set(snaps, c); }
+  const upto = Math.min(i, snaps.length - 1);
+  for (let j = c.arr.length; j <= upto; j++) c.arr[j] = frameEvent(snaps, j, signals, ghosts);
+  let a = null, b = null;
+  for (let j = upto; j >= 0 && !(a && b); j--) {
+    const e = c.arr[j]; if (!e) continue;
+    if (e.m === 'signal') { if (!a) a = { f: j, text: e.text, tone: e.tone }; }
+    else if (!b) b = { f: j, text: e.text, short: e.short || e.text, tone: e.tone };
+  }
+  if (!a && !b) return null;
+  return { sig: a, st: b };
+}
+
+const api = { MACHINES, LAYOUT, NW, NH, track, recent, _firstStrokeFrame: firstStrokeFrame, _findDivFrame: findDivFrame };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 return api;
 })();

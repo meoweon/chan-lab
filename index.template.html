@@ -128,17 +128,26 @@ button.pri:hover{background:#2a93ff}
 #scrim{display:none;position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.52);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 
 /* ---- 画布区 ---- */
+/* 全屏容器：主图 + 分界条 + 次级别副图整组进出全屏，各自标题条仍可折叠 */
+#chartwrap{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--bg)}
+/* K线图表：主图 + 分界条 + 次级别副图整组，标题条与状态网络 / 分支流程同级 */
+#klinehead{display:flex;align-items:center;gap:12px;padding:6px 14px;font-size:12px;min-width:0;background:var(--p);border-bottom:1px solid var(--b);flex:none}
+#klinehead>b{font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none}
+#klinehead>b:hover{color:var(--ac2)}
+#klinehint{margin-left:auto;color:var(--m);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chartwrap.kfolded{flex:0 0 auto}
+#chartwrap.kfolded>#cvwrap,#chartwrap.kfolded>#splitter,#chartwrap.kfolded>#subwrap{display:none}
 #cvwrap{position:relative;flex:1;min-height:120px;background:var(--bg);display:flex;flex-direction:column}
 #cvbar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 10px 3px;font-size:11px;color:#8e8e93;cursor:pointer;user-select:none}
 #cvbar:hover #cvtitle{color:var(--t2)}
 #cvinfo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:150px}
 #kleg{flex:none;white-space:nowrap}
-#cvwrap.folded{flex:0 0 auto}
+#cvwrap.folded{flex:0 0 auto;min-height:0}
 #cvwrap.folded #cvinfo{margin-right:0}
 #cvwrap.folded #cv,#cvwrap.folded #tip,#cvwrap.folded #cvctrl,#cvwrap.folded .ptoggle{display:none}
 #cvwrap.folded #cv,#cvwrap.folded #tip,#cvwrap.folded #lyr,#cvwrap.folded .ptoggle{display:none}
 #cv{flex:1;min-height:0;width:100%;display:block;cursor:grab}
-#cvwrap[hidden],#player[hidden]{display:none}
+#chartwrap[hidden],#cvwrap[hidden],#player[hidden]{display:none}
 /* 主图 / 副图分界：拖动分配高度（双击复位），高度记在 --subh 上 */
 #splitter{flex:none;height:8px;cursor:row-resize;touch-action:none;position:relative;z-index:6;outline:none}
 #splitter::before{content:"";position:absolute;left:50%;top:50%;width:40px;height:2px;margin:-1px 0 0 -20px;border-radius:1px;background:rgba(255,255,255,.12);transition:background .15s,width .15s}
@@ -147,7 +156,7 @@ button.pri:hover{background:#2a93ff}
 body.split-drag,body.split-drag #cv,body.split-drag #cvs{cursor:row-resize}
 #subwrap{flex:0 1 auto;height:clamp(78px,var(--subh,170px),55%);min-height:78px;border-top:1px solid var(--b);background:var(--bg);display:flex;flex-direction:column}
 #subwrap[hidden]{display:none}
-#subwrap.folded{height:auto}
+#subwrap.folded{height:auto;min-height:0}
 #subwrap.folded #cvs{display:none}
 #subbar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 10px 3px;font-size:11px;color:#8e8e93;cursor:pointer;user-select:none}
 #subbar:hover #subtitle{color:var(--t2)}
@@ -171,15 +180,21 @@ body.split-drag,body.split-drag #cv,body.split-drag #cvs{cursor:row-resize}
 #lyr{position:relative}
 #lyrbtn,#fsbtn{background:rgba(44,44,46,.82);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:999px;padding:4px 13px;color:var(--t2);box-shadow:0 0 0 .5px var(--b2);white-space:nowrap}
 #lyrbtn:hover,#fsbtn:hover{color:#fff;background:rgba(58,58,60,.9)}
-/* 全屏：优先原生全屏；不支持元素级全屏的浏览器退回页面内铺满。
+/* 全屏：主图与次级别副图一起进全屏（各自的标题条仍可点击折叠）。
+   优先原生全屏；不支持元素级全屏的浏览器退回页面内铺满。
    显式给到视口尺寸并留出安全区，避免 Safari 全屏动画期间尺寸未落定、刘海/home 指示条遮挡边缘。 */
-#cvwrap:fullscreen,#cvwrap:-webkit-full-screen,#cvwrap.fs-css{
+#chartwrap:fullscreen,#chartwrap:-webkit-full-screen,#chartwrap.fs-css{
   width:100vw;height:100vh;height:100dvh;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   background:var(--bg);
 }
-#cvwrap:fullscreen .ptoggle,#cvwrap:-webkit-full-screen .ptoggle,#cvwrap.fs-css .ptoggle{display:none}
-#cvwrap.fs-css{position:fixed;inset:0;z-index:9999}
+#chartwrap:fullscreen .ptoggle,#chartwrap:-webkit-full-screen .ptoggle,#chartwrap.fs-css .ptoggle{display:none}
+#chartwrap:fullscreen #klinehead,#chartwrap:-webkit-full-screen #klinehead,#chartwrap.fs-css #klinehead{display:none}
+#chartwrap.fs-css{position:fixed;inset:0;z-index:9999}
+/* 主图折叠后把整块高度让给次级别（常规与全屏同口径），次级别折叠时保持标题条高度 */
+#cvwrap.folded ~ #subwrap:not(.folded){flex:1 1 auto;height:auto;min-height:0}
+/* 主图和次级别都折叠时整块画布收起到两条标题条，不再留下空白 */
+#chartwrap.allfolded{flex:0 0 auto}
 body.fs-open{overflow:hidden}
 #lyr .pop{display:none;position:absolute;right:0;top:34px;width:260px;padding:6px 0;background:rgba(44,44,46,.93);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);border-radius:14px;box-shadow:0 14px 44px rgba(0,0,0,.6),0 0 0 .5px var(--b2)}
 #lyr.open .pop{display:block}
@@ -292,6 +307,17 @@ body.fs-open{overflow:hidden}
 #stcur{flex:1;min-width:0;display:flex;gap:6px;justify-content:flex-end;overflow:hidden;font-size:11px;font-variant-numeric:tabular-nums}
 .pill{background:var(--p3);color:var(--m);border-radius:999px;padding:1px 10px;white-space:nowrap}
 .pill b{color:var(--t);font-weight:600}
+#stevrow{display:flex;align-items:baseline;gap:6px;padding:0 14px 6px;font-size:11px;color:var(--m);min-width:0}
+#stevrow.hide,#statewrap.folded #stevrow{display:none}
+#stev{flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;font-variant-numeric:tabular-nums;container-type:inline-size}
+@container (max-width: 430px){ #stev .sub{display:none} }
+@container (max-width: 330px){ #stev i{display:none} }
+#stev .stev{cursor:pointer}
+#stev .stev:hover b{text-decoration:underline}
+#stev b{font-weight:600}
+#stev i{font-style:normal;color:var(--faint);font-size:10px}
+#stev .sub{color:var(--faint);font-size:10px}
+#stev .stev.none{opacity:.6;cursor:default}
 #statewrap.folded .stlg{display:none}
 #gbwrap{flex:none;border-top:1px solid var(--b);background:var(--p)}
 #gbwrap[hidden]{display:none}
@@ -483,8 +509,8 @@ body.fs-open{overflow:hidden}
   #pathreset{order:13}
 
   /* 状态机 / 分支流程带 */
-  #sthead,#gbfhead{padding:6px 10px;gap:8px;flex-wrap:wrap;row-gap:4px}
-  #sthead>b,#gbfhead>b{font-size:11.5px}
+  #sthead,#gbfhead,#klinehead{padding:6px 10px;gap:8px;flex-wrap:wrap;row-gap:4px}
+  #sthead>b,#gbfhead>b,#klinehead>b{font-size:11.5px}
   #stcur{order:5;flex-basis:100%;justify-content:flex-start;overflow-x:auto;overflow-y:hidden}
   #stbody{height:clamp(110px,16vh,150px)}
   #app[data-mode="chart"] #stbody{height:clamp(120px,18vh,170px)}
@@ -522,6 +548,7 @@ body.fs-open{overflow:hidden}
 
 @media (max-width:480px){
   #title{font-size:12px}
+  #klinehint{display:none}
   #vtabs button{padding:6px 10px}
   #player button{height:35px;min-width:34px;padding:0 7px}
   #play{padding:0 12px}
@@ -539,7 +566,7 @@ body.fs-open{overflow:hidden}
   #player{gap:6px 5px;padding:6px 10px calc(6px + env(safe-area-inset-bottom))}
   #player button{height:36px;min-width:36px}
   #player select{height:34px}
-  #sthead,#gbfhead{padding:4px 10px;row-gap:2px}
+  #sthead,#gbfhead,#klinehead{padding:4px 10px;row-gap:2px}
   #stcur{order:0;flex-basis:auto;flex:1;justify-content:flex-end}
   #stbody{height:88px}
   #app[data-mode="chart"] #stbody{height:96px}
@@ -571,6 +598,15 @@ body.fs-open{overflow:hidden}
       <div class="gb">
         <div class="f1"><div id="csvdrop" class="csvdrop"><button id="csvbtn" type="button" style="width:100%" data-tip="导入 CSV K线（可多选）：支持 Binance 导出（含表头）或按列 time,open,high,low,close[,volume]。多个文件按时间合并、重复时间戳去重，适合按天/月拆分的导出文件。导入后调整生成类参数会回到理想行情；导入行情没有 0 噪声基线，对比页签不会出现。">导入 CSV 行情…</button><div class="hint" id="csvmsg">可一次选多个文件，或把多个 CSV 拖进这个框（也可拖到画布）。同批文件按时间合并、重复时间戳去重。</div></div><input id="csvfile" type="file" accept=".csv,.txt,text/csv" multiple hidden></div>
         <div class="f numrow"><span data-tip="数据很长时只取最近这么多根（回放要逐根快照，过长会很慢、很占内存）。只在导入 CSV 时读取，微调后需重新导入才生效。">取最近 N 根</span><span class="num"><button type="button" data-for="csvmax" data-step="-1" aria-label="减少 100 根" data-tip="减少 100 根（下限 150）；下次导入 CSV 时生效。">−</button><input id="csvmax" type="number" value="1000" min="150" max="3000" step="100"><button type="button" data-for="csvmax" data-step="1" aria-label="增加 100 根" data-tip="增加 100 根（上限 3000）；下次导入 CSV 时生效。">+</button></span></div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>案例</summary>
+      <div class="gb">
+        <div id="presets"></div>
+        <div class="f1"><button id="save" data-tip="把当前行情参数与算法参数存到浏览器本地，下次点击案例名即可复现。" style="width:100%">保存当前案例</button></div>
+        <div id="cases"></div>
       </div>
     </details>
 
@@ -606,15 +642,6 @@ body.fs-open{overflow:hidden}
       </div>
     </details>
 
-    <details class="grp">
-      <summary>案例</summary>
-      <div class="gb">
-        <div id="presets"></div>
-        <div class="f1"><button id="save" data-tip="把当前行情参数与算法参数存到浏览器本地，下次点击案例名即可复现。" style="width:100%">保存当前案例</button></div>
-        <div id="cases"></div>
-      </div>
-    </details>
-
   </div>
 </aside>
 
@@ -630,11 +657,17 @@ body.fs-open{overflow:hidden}
     <button id="hbtn" data-tip="使用说明、术语表与能力对照：第一次接触从这开始。">?</button>
   </div>
 
+  <div id="chartwrap">
+  <div id="klinehead"><b id="klinetitle" data-tip="点击折叠 / 展开 K线图表（主级别 + 次级别）。组内两张图仍可各自折叠；默认展开，手动折叠后记住偏好。">▾ K线图表</b><span id="klinehint">主级别 + 次级别</span></div>
   <div id="cvwrap">
     <div id="cvbar"><span id="cvtitle">▾ 本级别主图</span><span id="kleg"></span><span id="cvinfo"></span></div>
     <canvas id="cv"></canvas><div id="tip"></div>
-    <div id="cvctrl"><button id="fsbtn" type="button" data-tip="全屏查看主图（Esc 退出）" aria-label="全屏查看主图">全屏</button><div id="lyr"><button id="lyrbtn" data-tip="选择画布上显示哪些结构图层。">图层 ▾</button><div class="pop"><div id="layers"></div></div></div></div>
+    <div id="cvctrl"><button id="fsbtn" type="button" data-tip="全屏查看主图与次级别（Esc 退出）" aria-label="全屏查看主图与次级别">全屏</button><div id="lyr"><button id="lyrbtn" data-tip="选择画布上显示哪些结构图层。">图层 ▾</button><div class="pop"><div id="layers"></div></div></div></div>
     <button id="tl" class="ptoggle" data-tip="收起左侧面板" aria-label="收起左侧面板">‹</button><button id="tr" class="ptoggle" data-tip="收起右侧面板" aria-label="收起右侧面板">›</button>
+  </div>
+
+  <div id="splitter" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="调整主图与副图高度"></div>
+  <div id="subwrap" hidden><div id="subbar"><span id="subtitle">▾ 次级别副图</span><span id="subinfo"></span></div><canvas id="cvs"></canvas></div>
   </div>
 
   <div id="mx" hidden>
@@ -643,9 +676,6 @@ body.fs-open{overflow:hidden}
     <div id="mxcap"><button id="mxprev">◀</button><span id="mxstep"></span><button id="mxnext">▶</button><span id="mxcapt"></span></div>
     <div id="mxright"></div>
   </div>
-
-  <div id="splitter" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="调整主图与副图高度"></div>
-  <div id="subwrap" hidden><div id="subbar"><span id="subtitle">▾ 次级别副图</span><span id="subinfo"></span></div><canvas id="cvs"></canvas></div>
 
   <div id="player">
     <button id="reset" data-tip="回到起点（第 2 根K线）">|◀◀</button><button id="pe" data-tip="跳到上一个结构事件">◀◀</button><button id="pb" data-tip="上一根K线">◀</button>
@@ -686,6 +716,7 @@ body.fs-open{overflow:hidden}
       <span id="stcur"></span>
       <button id="streset" data-tip="复位状态网络的缩放与平移。">复位</button>
     </div>
+    <div id="stevrow"><span id="stev"></span></div>
     <div id="stbody"><div id="stgwrap"><svg id="stg"></svg></div></div>
   </div>
 

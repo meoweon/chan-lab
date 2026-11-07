@@ -876,14 +876,15 @@ function geom(c, item, sel) {
 }
 
 /* ───────────────────────── 生成步骤（三态显微镜的"生成模式"） ───────────────────────── */
+/* 累积表：走到第 N 步时，此前所有步骤产生过的图层都还在（只增不减） */
 const STAGE = {
   raw: { raw: 1 },
   merged: { raw: 1, merged: 1 },
   fractal: { raw: 1, merged: 1, fractal: 1 },
   stroke: { raw: 1, merged: 1, fractal: 1, stroke: 1 },
-  pivot: { raw: 1, merged: 1, stroke: 1, pivot: 1 },
-  div: { raw: 1, merged: 1, stroke: 1, pivot: 1, div: 1 },
-  signal: { raw: 1, merged: 1, stroke: 1, sig: 1 },
+  pivot: { raw: 1, merged: 1, fractal: 1, stroke: 1, pivot: 1 },
+  div: { raw: 1, merged: 1, fractal: 1, stroke: 1, pivot: 1, div: 1 },
+  signal: { raw: 1, merged: 1, fractal: 1, stroke: 1, pivot: 1, div: 1, sig: 1 },
 };
 
 const mergedIdxOf = (res, bar) => res.merged.findIndex(m => bar >= m.startIndex && bar <= m.endIndex);
@@ -965,12 +966,12 @@ function fractalSteps(c, item, sel) {
     focus: { merged: mi },
   });
   out.push({
-    t: '取极值K线', stage: 'raw',
+    t: '取极值K线', stage: 'merged',
     d: `中间合并K线覆盖 #${mid.startIndex + o}–#${mid.endIndex + o}；取其中${isTop ? '最高' : '最低'}价所在的一根：#${f.barIndex + o}（${f.price}）。`,
     focus: { bars: [f.barIndex + o] },
   });
   out.push({
-    t: '确认时点', stage: 'raw',
+    t: '确认时点', stage: 'merged',
     d: `右邻合并K线的最后一根是 #${f.confirmBarIndex + o}；分型在这根K线收盘后才可知，即发生→可知延迟 ${f.confirmBarIndex - f.barIndex} 根。`,
     focus: { bars: [f.barIndex + o, f.confirmBarIndex + o] },
   });
@@ -1106,7 +1107,7 @@ function divSteps(c, sel) {
     focus: { pivot: d.pivotIndex, stroke: d.leaveIndex },
   });
   out.push({
-    t: '确定进入段', stage: 'stroke',
+    t: '确定进入段', stage: 'pivot',
     d: `源码取离开笔之前最近的同向笔：进入段 = 笔 ${d.enterIndex}（${en.isUp ? '↑' : '↓'} ${en.low}–${en.high}）。因笔严格交替，它恒为 leave − 2，落在中枢内。`,
     focus: { stroke: d.enterIndex, div: sel.index },
   });
@@ -1159,7 +1160,7 @@ function signalSteps(c, item, sel) {
   const hasStop = x.stopPrice != null, tradable = hasStop && (side === 'buy' ? x.stopPrice < x.price : x.stopPrice > x.price);
   const out = [];
   out.push({
-    t: '定位结构锚点', stage: 'stroke',
+    t: '定位结构锚点', stage: 'div',
     d: `${x.kind}（${side === 'buy' ? '买' : '卖'}）的结构极值在 #${x.gRef}（${x.refPrice}）${anchorIdx >= 0 ? `，对应笔 ${anchorIdx} 的终点` : ''}。信号不是在这一根发出的，而是等结构稳定后才记账。`,
     focus: { bars: [x.gRef], stroke: anchorIdx >= 0 ? anchorIdx : undefined },
   });

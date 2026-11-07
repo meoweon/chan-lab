@@ -8,7 +8,7 @@ const START = 2, LS = 'chanlab.cases';
    画布蜡烛、顶底分型 chip、主图图例一律从这里取色；流程带方向色 GB_COL 同语义、异色阶。 */
 const KLINE_COL = { up: '#30d158', down: '#ff453a' };
 /* 概念 tooltip：首次接触的术语悬停即解释（与帮助浮层「术语表」同口径） */
-const TAG = { merge: ['包含', '#94a3b8', '包含关系：相邻两根K线一根的高低点完全覆盖另一根。须先按方向合并（新高取高高、新低取低低），才能识别分型。'], fractal: ['分型', '#f59e0b', '分型：连续三根经包含处理的K线，中间那根高点最高（顶）或低点最低（底）。画布上三角=发生位置、圆点=算法确认时点。'], 'fractal-': ['分型修正', '#b45309', '分型修正：原分型被更极端的K线取代，或其K线并入包含合并——事件流如实记录，不抹掉历史。'], stroke: ['新笔', '#facc15', '笔：相邻顶、底分型的连线，两分型间至少 2 根独立合并K线（源码仅实现新笔）。实线=已稳定，虚线=未稳定。'], 'stroke~': ['笔修正', '#ca8a04', '笔修正：后续走势改变了笔的端点（出现更极端高低点）。端点改一次记一次，状态网络中为自环转移。'], stable: ['笔稳定', '#a3e635', '笔稳定：笔确认后身后又走满 2 笔，此后不再被修正（源码 isConfirmed 口径）。'], pivot: ['中枢形成', '#58a6ff', '中枢：至少连续三笔的重叠区间，ZG=重叠区上沿、ZD=下沿。形成后进入延伸 / 离开的演化。'], 'pivot~': ['中枢延伸', '#58a6ff', '中枢延伸：后续笔的极值仍在 [ZD, ZG] 内；离开后下一笔回到区间也按延伸处理（源码口径）。'], pivotLeave: ['中枢离开', '#38bdf8', '中枢离开：某笔极值超出 [ZD, ZG] 且不再回区间，中枢宣告结束。'], divergence: ['背驰', '#e879f9', '背驰：离开笔 MACD 柱面积 ÷ 进入笔面积 < 阈值（默认 0.9），即离开力度弱于进入。圆圈标在离开笔终点。'], signal: ['买卖点', '#22d3ee', '买卖点（简化版）：一买=下跌后中枢背驰；二买=一买后回调不创新低；三买=离开中枢后回调不回区间。镜像得卖点。'], ghost: ['被过滤', '#94a3b8', 'Ghost：结构上成立但被过滤的信号（暖机隔离 / 次级别未确认 / 不可交易）。画布空心三角+星号，原因见事件流。'] };
+const TAG = { merge: ['包含', '#94a3b8', '包含关系：相邻两根K线一根的高低点完全覆盖另一根。须先按方向合并（新高取高高、新低取低低），才能识别分型。'], fractal: ['分型', '#f59e0b', '分型：连续三根经包含处理的K线，中间那根高点最高（顶）或低点最低（底）。画布上三角=发生位置、圆点=算法确认时点。'], 'fractal-': ['分型修正', '#b45309', '分型修正：原分型被更极端的K线取代，或其K线并入包含合并——事件流如实记录，不抹掉历史。'], stroke: ['新笔', '#facc15', '笔：相邻顶、底分型的连线，两分型间至少 2 根独立合并K线（源码仅实现新笔）。实线=已稳定，虚线=未稳定。'], 'stroke~': ['笔修正', '#ca8a04', '笔修正：后续走势改变了笔的端点（出现更极端高低点）。端点改一次记一次，状态网络中为自环转移。'], stable: ['笔稳定', '#a3e635', '笔稳定：笔确认后身后又走满 2 笔，此后不再被修正（源码 isConfirmed 口径）。'], pivot: ['中枢形成', '#58a6ff', '中枢：至少连续三笔的重叠区间，ZG=重叠区上沿、ZD=下沿。形成后进入延伸 / 离开的演化。'], 'pivot~': ['中枢延伸', '#58a6ff', '中枢延伸：后续笔的极值仍在 [ZD, ZG] 内；离开后下一笔回到区间也按延伸处理（源码口径）。'], pivotLeave: ['中枢离开', '#38bdf8', '中枢离开：某笔极值超出 [ZD, ZG] 且不再回区间，中枢宣告结束。'], divergence: ['背驰', '#e879f9', '背驰：离开笔 MACD 柱面积 ÷ 进入笔面积 < 阈值（默认 0.9），即离开力度弱于进入。圆圈标在离开笔终点。'], signal: ['买卖点', '#22d3ee', '买卖点（简化版）：一买=下跌后中枢背驰；二买=一买后回调不创新低；三买=离开中枢后回调不回区间。镜像得卖点。'], ghost: ['被过滤', '#94a3b8', 'Ghost：结构上成立但被过滤的信号（暖机隔离 / 次级别未确认 / 不可交易）。画布空心三角+圆点，原因见事件流。'] };
 const tag = t => { const [n, c, tip] = TAG[t] || [t, '#888', null]; return `<span class="tg" style="background:${c}22;color:${c};border-color:${c}66"${tip ? ` data-tip="${tip}"` : ''}>${n}</span>`; };
 /* 缠师金句：用于底部轮播，保持短句，便于一眼读完 */
 const QUOTES = [
@@ -109,9 +109,9 @@ const LAYERS = [
   ['stroke', '笔（实线=稳定，虚线=未稳定）', '实线笔已稳定、不再修正；虚线笔尚未稳定，后续K线仍可能把它修正。'],
   ['pivot', '中枢（虚线=尚未被离开）', '中枢区间 [ZD, ZG]，标注上下沿与笔数；虚线框表示尚未被离开笔确认结束。'],
   ['div', '背驰', '圆圈标记离开笔终点的笔级背驰，数字为 MACD 面积比（离开 ÷ 进入）。'],
-  ['sig', '买卖点（实心=已发出）', '实心三角为算法已发出的买卖点，标注 ①1买/②2买 等类型；①=信号编号，与止损标签、HUD 共用，用来把买卖点、止损线、显微镜记录对上号。点选信号后 HUD 末行给事后结果（已止损 / 进行中 / 12 根结束，含 MFE/MAE，与 mdk 的 outcome 同口径），图上不改写信号。'],
-  ['stop', '止损线（ATR×0.5）', '每条止损 = 锚定笔极值 ∓ 0.5×ATR14；从记账根（起点#号）向右画到 +12 根或窗口右缘（终点#号），竖排 % = 记账价→止损价的幅度。标签四行：①信号编号+止损价、计算式、起止根号、百分比算式；×n = n 个信号同价重叠在同一条线上。实心信号的止损必在入场价正确一侧；空心 ghost 若是「不可交易」，说明记账时收盘已越过该止损线。'],
-  ['ghost', '被过滤的信号（空心+原因）', '结构成立但被过滤的信号：空心三角 + 星号，星号后的一个字就是原因——暖 = 暖机隔离，次 = 次级别未确认，损 = 不可交易（记账价已越过止损）。细则见右侧「事件」或显微镜里的「状态」。'],
+  ['sig', '买卖点（实心=已发出）', '实心三角为算法已发出的买卖点，标注 ①1买/②2买 等类型；①=信号编号，与止损标签、HUD 共用，用来把买卖点、止损线、显微镜记录对上号。点选信号后 HUD 末行给事后结果：已止损（记账后任意一根触及止损线，第 12 根以后才破线也算）/ 浮盈 / 浮亏（没被止损时，按当前播放头这一根的收盘算浮动盈亏，12 根时点作参考）；刚记账那一根还没有后续K线，记「刚发出」。含 MFE/MAE。图上不改写信号。'],
+  ['stop', '止损线（ATR×0.5）', '每条止损 = 锚定笔极值 ∓ 0.5×ATR14；从记账根（起点#号）向右画到 +12 根或窗口右缘（终点#号）；若 12 根之后才被破线，线延画到破线那根并整条转红。竖排 % = 记账价→止损价的幅度。标签四行：①信号编号+止损价、计算式、起止根号、百分比算式；×n = n 个信号同价重叠在同一条线上。实心信号的止损必在入场价正确一侧；空心 ghost 若是「不可交易」，说明记账时收盘已越过该止损线。'],
+  ['ghost', '被过滤的信号（空心+原因）', '结构成立但被过滤的信号：空心三角 + 圆点，圆点后的一个字就是原因——暖 = 暖机隔离，次 = 次级别未确认，损 = 不可交易（记账价已越过止损）。细则见右侧「事件」或显微镜里的「状态」。'],
   ['gb', '分支预览（完全分类）', '主图画出「下一单位的两个方向」的幽灵K线（虚影，与时间轴逐根对齐，用与落实时完全相同的构造器生成）；点幽灵或底部流程带的虚框节点即落实。最小单位可在流程带头切换：单根K线 / 最小分型 / 最小笔（默认最小分型），切换只影响后续步骤；中枢、背驰、买卖点是单位序列回放后浮现的判定，不作为选项。'],
   ['dual', '上下双屏 + 差异带', '仅在污染 > 0、存在同源 0 噪声基线时生效：上屏画 0 噪声理想基线、下屏画当前受污染行情（保留完整点击选中与显微镜联动），中间 26px 差异带标出新增包含 / 分型、信号偏移与破坏，并绘制跨屏笔端点连线。取消勾选即只看当前行情的单画布。显微镜聚焦时自动让位。'],
 ];
@@ -532,7 +532,7 @@ function play() {
 /* 视图窗口：shift 为视口右缘相对"当前K线+6"的偏移（≤0 表示回看历史），vz 为纵向缩放 */
 function clampShift(s) { return Math.max(-S.i - 5, Math.min(0, s)); }
 function resetView() { S.vp.shift = 0; S.vp.vis = 110; S.vp.vz = 1; S.yLock = null; draw(); }
-function draw() { syncSplitter(); drawMain(); drawSub(); gbFlowDraw(); syncSplitter(); }
+function draw() { syncSplitter(); drawMain(); drawSub(); gbFlowDraw(); syncSplitter(); syncChartFold(); }
 function drawMain() {
   const wrapC = $('#cvwrap'); if (wrapC) wrapC.classList.toggle('folded', S.cvFold);
   $('#cvtitle').textContent = (S.cvFold ? '▸' : '▾') + ' 本级别主图';
@@ -810,6 +810,8 @@ function drawSubPanel(g, W, y0, H, P, label, yr, legend) {
   if (bw >= 10) for (let b = Math.max(0, Math.ceil(left)); b <= i + 1 && padL + (b - left) * bw <= W - padR; b++) { const x = padL + (b - left) * bw; line(x, padT, x, padT + ph, '#1c1c1e', 1); }
   const xEnd = padL + (i + 1 - left) * bw; g.fillStyle = 'rgba(255,255,255,0.025)'; g.fillRect(xEnd, padT, W, ph);
   const WBOX = [];   /* 窗口标签互相避让：同一段里 ghost 与信号窗口可能贴在一起 */
+  const CBOX = [];   /* 确认笔标签互相避让：相邻两笔的中点常常贴得很近 */
+  const TAGS = [];   /* 确认笔标签延后绘制 */
   const win = (s, ghost, allowLab) => {
     if (s.gConfirm > i) return;
     const x0 = XM(s.gRef) - bw / 2, x1 = XM(s.gConfirm) + bw / 2; if (x1 < padL || x0 > W - padR) return;
@@ -820,7 +822,7 @@ function drawSubPanel(g, W, y0, H, P, label, yr, legend) {
     line(a0, padT, a0, padT + ph, col + '55', 1, [3, 3]);
     line(a1, padT, a1, padT + ph, col + '55', 1, [3, 3]);
     if (ghost && !allowLab) return;   /* ghost 多了就只留色带，避免标签堆满顶部 */
-    const lab = s.kind + (ghost ? '*' : '') + ' 确认窗口';
+    const lab = s.kind + (ghost ? ' ·' : '') + ' 确认窗口';
     g.font = 'bold 10.5px -apple-system, "PingFang SC", system-ui';
     let tx = Math.max(x0, padL) + 3;
     const lw2 = g.measureText(lab).width + 8;
@@ -830,9 +832,33 @@ function drawSubPanel(g, W, y0, H, P, label, yr, legend) {
     WBOX.push({ x: tx, y: ty, w: lw2, h: 15 });
     tag(lab, tx, ty, col, 'bold 10.5px -apple-system, "PingFang SC", system-ui');
   };
-  const sigs = P.sigs || [], ghs = P.ghs || [];
+  /* 与主图同口径：mdk 会把同一结构在新稳定根上重发一次，数据保留、画布只画最早一次 */
+  const sigs = uniqueSig(P.sigs || []).map(x => x.s), ghs = uniqueSig(P.ghs || []).map(x => x.s);
   const sigWins = sigs.filter(s => s.gConfirm <= i).length;
   sigs.forEach(s => win(s, false)); ghs.forEach(s => win(s, true, sigWins === 0));
+  /* 买卖点在副图上也标出来：记账根处一条竖线 + 顶部同号胶囊，颜色按方向
+     （窗口色带左端=结构极值、右端=记账根，胶囊正落在右端，一眼看出"确认在前、信号在后"） */
+  sigs.forEach((s, k) => {
+    if (s.gConfirm > i) return;
+    const x = XM(s.gConfirm);
+    if (x < padL - 2 || x > W - padR + 2) return;
+    const col = s.side === 'buy' ? '#22d3ee' : '#f472b6';
+    line(x, padT + 14, x, padT + ph - 2, col + '4d', 1, [2, 4]);
+    g.beginPath();   /* 底部小三角：买 ▲ / 卖 ▼ */
+    if (s.side === 'buy') { g.moveTo(x, padT + ph - 2); g.lineTo(x - 4, padT + ph + 4); g.lineTo(x + 4, padT + ph + 4); }
+    else { g.moveTo(x, padT + ph + 4); g.lineTo(x - 4, padT + ph - 2); g.lineTo(x + 4, padT + ph - 2); }
+    g.closePath(); g.fillStyle = col; g.fill();
+    const lab = sigTag(k + 1) + ' ' + s.kind;
+    g.font = 'bold 10.5px -apple-system, "PingFang SC", system-ui';
+    const lw3 = g.measureText(lab).width + 8;
+    let tx = Math.min(Math.max(x - lw3 / 2, padL + 2), W - padR - lw3 - 2);
+    let ty = padT + 3;
+    const hit2 = () => WBOX.some(b => tx < b.x + b.w && tx + lw3 > b.x && ty < b.y + b.h && ty + 15 > b.y);
+    for (let q = 0; q < 4 && hit2(); q++) ty += 16;
+    if (hit2()) return;   /* 窄屏实在挤不下就只留竖线+三角，别把胶囊压到K线上 */
+    WBOX.push({ x: tx, y: ty, w: lw3, h: 15 });
+    tag(lab, tx, ty, col, 'bold 10.5px -apple-system, "PingFang SC", system-ui');
+  });
   for (let k = s0; k <= s1; k++) {
     const c = sub[k], x = X(k), col = c.close >= c.open ? KLINE_COL.up : KLINE_COL.down;
     line(x, Y(c.high), x, Y(c.low), col, 1);
@@ -848,39 +874,82 @@ function drawSubPanel(g, W, y0, H, P, label, yr, legend) {
     });
     /* 命中的“确认笔”：主图信号记 subConfirm（startTime/endTime/stableTime），按时间对上号 */
     const conf = new Map();
-    for (const s of [...sigs, ...ghs]) {
-      const c = s.subConfirm; if (c) conf.set(c.startTime + '|' + c.endTime, c);
-    }
+    for (const [list, named] of [[sigs, true], [ghs, false]]) list.forEach((s, k) => {
+      if (s.gConfirm > i) return;   /* 还没发出的信号，连它的确认笔都不该提前画出来（未来函数） */
+      const c = s.subConfirm; if (!c) return;
+      const key = c.startTime + '|' + c.endTime;
+      if (!conf.has(key)) conf.set(key, { c, no: named ? k + 1 : 0, kind: s.kind, gRef: s.gRef });
+    });
     r.strokes.forEach(st => {
       const a = st.startBarIndex + A.start, b = st.endBarIndex + A.start; if (X(b) < padL - 4 || X(a) > W - padR + 4) return;
       const hit = conf.get(sub[a].time + '|' + sub[b].time) || null;
-      if (hit) line(X(a), Y(st.startPrice), X(b), Y(st.endPrice), 'rgba(248,250,252,0.18)', 7);
-      line(X(a), Y(st.startPrice), X(b), Y(st.endPrice), hit ? '#f8fafc' : '#ffd60a', hit ? 2.8 : (st.isConfirmed ? 1.3 : 1.0), st.isConfirmed ? [] : [5, 3]);
-      if (hit) {
-        let ks = -1; for (let k = s0; k <= s1; k++) if (sub[k].time === hit.stableTime) { ks = k; break; }
-        if (ks >= 0) line(X(b), Y(st.endPrice), X(ks), Y(st.endPrice), 'rgba(248,250,252,0.36)', 1, [2, 3]);   // 笔 → 稳定时点
-        g.fillStyle = '#f8fafc'; g.beginPath(); g.arc(X(a), Y(st.startPrice), 2.2, 0, 6.3); g.arc(X(b), Y(st.endPrice), 2.2, 0, 6.3); g.fill();
-        const mx = (X(a) + X(b)) / 2, my = (Y(st.startPrice) + Y(st.endPrice)) / 2;
-        g.font = 'bold 10px -apple-system, "PingFang SC", system-ui';
-        const tw = g.measureText('确认笔').width + 8;
-        let tx = mx + 6; if (tx + tw > W - padR - 2) tx = Math.max(padL + 2, mx - tw - 6);
-        tag('确认笔', tx, my - 20, '#f8fafc', 'bold 10px -apple-system, "PingFang SC", system-ui');
+      const hitC = hit ? hit.c : null;
+      const xa = X(a), xb = X(b), ya = Y(st.startPrice), yb = Y(st.endPrice);
+      let ks = -1;
+      if (hit) for (let k = s0; k <= s1; k++) if (sub[k].time === hitC.stableTime) { ks = k; break; }
+      if (!hit) {
+        g.strokeStyle = '#ffd60a'; g.lineWidth = st.isConfirmed ? 1.3 : 1.0; g.setLineDash(st.isConfirmed ? [] : [5, 3]);
+        g.beginPath(); g.moveTo(xa, ya); g.lineTo(xb, yb); g.stroke(); g.setLineDash([]);
+        return;
       }
+      /* 确认笔本身是"证据"，画满粗白；判据是它的**稳定点**落在窗口内，
+         所以从笔尾拉一条折线接到稳定点，标签也挂到稳定点上——避免"确认笔在窗口外"的错觉 */
+      line(xa, ya, xb, yb, 'rgba(248,250,252,0.18)', 7);
+      line(xa, ya, xb, yb, '#f8fafc', 2.8);
+      g.fillStyle = '#f8fafc';
+      g.beginPath(); g.arc(xa, ya, 2.2, 0, 6.3); g.arc(xb, yb, 2.2, 0, 6.3); g.fill();
+      const xs = ks >= 0 ? X(ks) : xb, ys = ks >= 0 ? Y(sub[ks].close) : yb;
+      if (ks >= 0 && (Math.abs(xs - xb) > 2 || Math.abs(ys - yb) > 2)) {
+        line(xb, yb, xs, yb, 'rgba(248,250,252,0.55)', 1.2, [3, 3]);
+        line(xs, yb, xs, ys, 'rgba(248,250,252,0.55)', 1.2, [3, 3]);
+        const dir = ys >= yb ? 1 : -1;
+        g.fillStyle = 'rgba(248,250,252,0.7)';
+        g.beginPath(); g.moveTo(xs, ys - dir * 2); g.lineTo(xs - 3, ys - dir * 8); g.lineTo(xs + 3, ys - dir * 8); g.closePath(); g.fill();
+      }
+      /* 标签贴在**笔身**上（它才是"确认笔"这个名字指的东西）；
+         稳定点只打白点+「稳定」，用折线把两者连起来 */
+      const clab = hit.no ? sigTag(hit.no) + hit.kind + ' 确认笔' : '确认笔';
+      g.font = 'bold 10px -apple-system, "PingFang SC", system-ui';
+      const tw = g.measureText(clab).width + 8;
+      let tx = (xa + xb) / 2 + 6;
+      if (tx + tw > W - padR - 2) tx = Math.max(padL + 2, tx - tw - 12);
+      let ty2 = Math.min(ya, yb) - 20;   /* 挂在笔的上沿，别压在笔身上 */
+      const hits2 = () => CBOX.some(bx => tx < bx.x + bx.w && tx + tw > bx.x && ty2 < bx.y + bx.h && ty2 + 14 > bx.y);
+      for (let q = 0; q < 3 && hits2(); q++) ty2 -= 15;
+      if (ty2 > padT + 2) { CBOX.push({ x: tx, y: ty2, w: tw, h: 14 }); TAGS.push({ t: clab, x: tx, y: ty2 }); }
     });
     for (const c of conf.values()) {
-      for (let k = s0; k <= s1; k++) if (sub[k].time === c.stableTime) {
+      for (let k = s0; k <= s1; k++) if (sub[k].time === c.c.stableTime) {
         line(X(k), padT, X(k), padT + ph, 'rgba(248,250,252,0.30)', 1, [2, 4]);
         g.strokeStyle = 'rgba(248,250,252,0.85)'; g.lineWidth = 1.4; g.beginPath(); g.arc(X(k), Y(sub[k].close), 3, 0, 6.3); g.stroke();
+        /* 稳定点才是判据：在窗口内打一个白点并标出来 */
+        if (bw >= 9) txt('稳定', X(k) + 5, Y(sub[k].close) + 3, 'rgba(248,250,252,0.75)', '9px -apple-system, "PingFang SC", system-ui');
         break;
       }
     }
+    for (const t of TAGS) tag(t.t, t.x, t.y, '#f8fafc', 'bold 10px -apple-system, "PingFang SC", system-ui');
   }
   line(xEnd, padT, xEnd, padT + ph, 'rgba(10,132,255,0.4)', 1, [3, 3]);
   g.restore();
-  if (legend) tag('黄线 笔 · 黄虚线 未稳 · 白粗 确认笔 · 蓝框 中枢 · 青区 窗口', padL + 6, padT + ph - 19, '#8e8e93', '10px -apple-system, "PingFang SC", system-ui');
+  if (legend) tag('黄线 笔 · 黄虚线 未稳 · 白粗 确认笔 · 蓝框 中枢 · 青区 窗口 · 胶囊 买卖点 · 白点 稳定', padL + 6, padT + ph - 19, '#8e8e93', '10px -apple-system, "PingFang SC", system-ui');
   if (label) txt(label.t, padL + 4, 14, label.c, 'bold 11px -apple-system, "PingFang SC", system-ui');
   g.restore();
 }
+
+/* 绘制层去重：mdk 回填（ChanBackfill）会把同一结构在新稳定时点重发一次（记账价随当根收盘微调），
+   数据层原样保留（对齐 mdk），画布只画最早一次，免得同一极值上叠出两个标签、两条止损线。 */
+const sigKey = s => s.kind + '|' + s.side + '|' + s.gRef;
+const uniqueSig = list => {
+  const seen = new Set();
+  return list.map((s, idx) => ({ s, idx })).filter(({ s }) => {
+    const k = sigKey(s);
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+};
+
+const SIGNO = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳'];
+const sigTag = n => n > 0 ? (SIGNO[n - 1] || '(' + n + ')') : '';
 
 function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, txt, cvR, cvB) {
   const RGT = cvR || (X(right) + bw / 2);   /* 绘图区右边界（CSS px），标签与止损线都夹在这里面 */
@@ -890,8 +959,6 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
   const putBox = (x, y, w, h) => { LBOX.push({ x, y, w, h }); };
   const FX = fxInfo(), isHot = (k, idx) => !!((S.sel && S.sel.kind === k && S.sel.index === idx) || (FX && FX.focus[k] === idx));
   /* 信号编号：三角胶囊、止损标签、HUD 共用同一个序号，避免"一条止损到底是谁的" */
-  const SIGNO = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳'];
-  const sigTag = n => n > 0 ? (SIGNO[n - 1] || '(' + n + ')') : '';
   if (FX && FX.focus.bars && S.tf) for (const bb of FX.focus.bars) { if (bb < 0 || bb > i) continue; g.fillStyle = 'rgba(10,132,255,0.16)'; g.fillRect(X(bb) - bw / 2, S.tf.padT, Math.max(2, bw), S.tf.ph); }
   if (L.pivot) r.pivots.forEach((p, pi) => {
     const a = r.strokes[p.startStrokeIndex], z = r.strokes[p.endStrokeIndex]; if (!a || !z) return;
@@ -938,10 +1005,38 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
     txt('背驰 ' + d.areaRatio.toFixed(2), x + 10, d.isUp ? y - 8 : (y + 14 < PH() - 6 ? y + 14 : y - 10), '#e879f9');
   });
   const GH = { warmup: '暖', sublevel: '次', untradable: '损' };
-  const mark = (s, ghost, idx) => {
+  /* 事后结果（只陈述事实，不改图上的信号）：止损扫描到播放头，不限 12 根；
+     没被止损就按当前播放头收盘做盯市（浮盈/浮亏），12 根只是 HUD 里的参考时点。 */
+  const HOLD = 12;
+  /* 止损是否被触及：从记账根之后一直扫到当前播放头，不设 12 根上限。
+     12 根只是参考时点，不是"此后破线就不算数"的封口：
+     头寸在被打掉之前一直开着，第 13 根破线和第 3 根破线一样是止损。 */
+  const stopHitBar = s => {
+    if (s.stopPrice == null) return -1;
+    const a = s.gConfirm, buy = s.side === 'buy';
+    for (let k = a + 1; k <= i; k++) {
+      const c = m[k]; if (!c) break;
+      if (buy ? c.low <= s.stopPrice : c.high >= s.stopPrice) return k;
+    }
+    return -1;
+  };
+  const sigOutcome = s => {
+    if (s.stopPrice == null) return null;
+    const a = s.gConfirm;
+    if (i <= a) return { t: '刚发出', c: '#94a3b8' };   // 记账就落在当前这根，还没有后续K线可算盈亏
+    const buy = s.side === 'buy', R = Math.abs(s.price - s.stopPrice) || 1e-9;
+    if (stopHitBar(s) >= 0) return { t: '已止损', c: '#f87171' };
+    /* 没被止损：按当前播放头这一根的收盘做盯市（浮动盈亏），12 根只是参考时点，不再冻结结果 */
+    const cur = m[Math.min(i, m.length - 1)];
+    const ret = (buy ? cur.close - s.price : s.price - cur.close) / R;
+    return ret >= 0 ? { t: '浮盈', c: '#4ade80' } : { t: '浮亏', c: '#fbbf24' };
+  };
+  const mark = (s, ghost, idx, no) => {
     if (s.gConfirm > i) return;
     const xc = X(s.gConfirm), xr = X(s.gRef), buy = s.side === 'buy', col = ghost ? '#64748b' : (buy ? '#22d3ee' : '#f472b6'), y = Y(s.price);
     const hot = !!((S.sel && S.sel.kind === 'signal' && S.sel.index === idx && S.sel.ghost === ghost) || (FX && FX.focus.sig && FX.focus.sig.x === s));
+    const outcome = !ghost ? sigOutcome(s) : null;
+    const stopped = outcome && outcome.t === '已止损';
     line(xr, Y(s.refPrice), xc, y, col, 1, [3, 3]);                  // 结构极值（发生）→ 确认（可知）
     g.beginPath(); g.arc(xr, Y(s.refPrice), 3, 0, 6.3); g.strokeStyle = col; g.lineWidth = 1.5; g.stroke();
     /* 结构极值处标出对应的记账收盘价（全量，不止选中） */
@@ -960,7 +1055,10 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
     }
     g.beginPath();
     if (buy) { g.moveTo(xc, y + 4); g.lineTo(xc - 6, y + 14); g.lineTo(xc + 6, y + 14); } else { g.moveTo(xc, y - 4); g.lineTo(xc - 6, y - 14); g.lineTo(xc + 6, y - 14); }
-    g.closePath(); if (ghost) { g.strokeStyle = col; g.stroke(); } else { g.fillStyle = col; g.fill(); }
+    g.closePath();
+    if (ghost) { g.strokeStyle = col; g.stroke(); }
+    else if (stopped) { g.strokeStyle = '#f87171'; g.lineWidth = 1.8; g.stroke(); }
+    else { g.fillStyle = col; g.fill(); }
     if (hot) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(xc, y, 12, 0, 6.3); g.stroke(); }
     /* 三角上方/下方标出结构极值价（先占位，避免被信号胶囊挤走）；选中时 HUD 已有，不叠字 */
     if (!hot) {
@@ -976,9 +1074,13 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
         txt(rl, rx + rw / 2, ry + 8.5, col + 'bb', lfR, 'center');
       }
     }
-    const label = (ghost ? '' : sigTag(idx + 1) + ' ') + s.kind + (ghost ? '*' + (GH[s.reason] || '') : '') + (hot ? ' ' + (+s.price).toFixed(2) : ''), lf = 'bold 12px -apple-system, "PingFang SC", system-ui';
+    const baseLabel = (ghost ? '' : sigTag(no || idx + 1) + ' ') + s.kind + (ghost ? ' · ' + (GH[s.reason] || '') : '');
+    const suffix = outcome ? ' · ' + outcome.t : '';
+    const lf = 'bold 12px -apple-system, "PingFang SC", system-ui';
     g.font = lf;
-    const lw = g.measureText(label).width + 10, lh = 17;
+    const mainW = g.measureText(baseLabel).width;
+    const sufW = outcome ? g.measureText(suffix).width : 0;
+    const lw = mainW + sufW + 10, lh = 17;
     let lx = xc + 9;                                  // 标签放到K线右侧，避免压在实体上
     if (lx + lw > RGT - 2) lx = xc - 9 - lw;           // 右边界不够则翻到左侧
     if (lx < X(left)) lx = Math.max(X(left), Math.min(xc - lw / 2, RGT - lw - 2));
@@ -987,11 +1089,17 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
     ly = Math.max((S.tf ? S.tf.padT : 0) + 2, Math.min(PH() - lh - 2, ly));
     putBox(lx, ly, lw, lh);
     g.beginPath(); g.moveTo(lx + 4, ly); g.arcTo(lx + lw, ly, lx + lw, ly + lh, 4); g.arcTo(lx + lw, ly + lh, lx, ly + lh, 4); g.arcTo(lx, ly + lh, lx, ly, 4); g.arcTo(lx, ly, lx + lw, ly, 4); g.closePath();
-    g.fillStyle = 'rgba(14,14,16,0.88)'; g.fill(); g.strokeStyle = col; g.lineWidth = 1; g.stroke();
-    txt(label, lx + lw / 2, ly + 12.5, col, lf, 'center');
+    g.fillStyle = 'rgba(14,14,16,0.88)'; g.fill();
+    g.strokeStyle = stopped ? '#f87171' : col; g.lineWidth = 1; g.stroke();
+    txt(baseLabel, lx + 5 + mainW / 2, ly + 12.5, col, lf, 'center');
+    if (outcome) txt(suffix, lx + mainW + 5 + sufW / 2, ly + 12.5, outcome.c, lf, 'center');
   };
-  if (L.sig) S.signals.forEach((s, si) => mark(s, false, si));
-  if (L.ghost) S.ghosts.forEach((s, si) => mark(s, true, si));
+  /* 显示编号按"去重后的顺序"连续编，避免被 mdk 的重发信号顶出空号（① ② ④） */
+  const sigNo = new Map();
+  { const seen = new Set(); let n = 0;
+    S.signals.forEach((s, si) => { const k = sigKey(s); if (seen.has(k)) return; seen.add(k); sigNo.set(si, ++n); }); }
+  if (L.sig) uniqueSig(S.signals).forEach(({ s, idx }) => mark(s, false, idx, sigNo.get(idx)));
+  if (L.ghost) uniqueSig(S.ghosts).forEach(({ s, idx }) => mark(s, true, idx));
   /* 2 类：选中时把配对的 1 类标出来，并画出“前低 / 回抽低点”两条短横线 */
   const pairMark = s => {
     const col = s.side === 'buy' ? '#22d3ee' : '#f472b6', a = s.cmp.a, b = s.cmp.b;
@@ -1012,7 +1120,7 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
     const px = X(p1.gConfirm), py = Y(p1.price);
     line(px, py, X(s.gConfirm), Y(s.price), col + '66', 1, [4, 4]);
     g.strokeStyle = col; g.lineWidth = 1.6; g.beginPath(); g.arc(px, py, 14, 0, 6.3); g.stroke();
-    const lab = k1 + '（配对）', lf = 'bold 11px -apple-system, "PingFang SC", system-ui';
+    const lab = k1, lf = 'bold 11px -apple-system, "PingFang SC", system-ui';
     g.font = lf;
     const lw = g.measureText(lab).width + 10, lh = 16;
     let lx = px + 17;
@@ -1091,27 +1199,33 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
       if (freeBox(tx - 2, y - 14, tw + 4, 11)) { putBox(tx - 2, y - 14, tw + 4, 11); txt('锚定笔', tx, y - 4, col + 'cc', '9px -apple-system, "PingFang SC", system-ui'); }
     }
   };
-  /* 事后结果（与 mdk 的 outcome 同口径）：只陈述事实，不改图上的信号 */
-  const HOLD = 12;
-  const sigOutcome = s => {
+  /* 事后结果详细版（HUD 用，含 MFE/MAE） */
+  const sigOutcomeDetail = s => {
     if (s.stopPrice == null) return null;
     const a = s.gConfirm, end = Math.min(i, a + HOLD);
     if (end <= a) return null;
     const buy = s.side === 'buy', R = Math.abs(s.price - s.stopPrice) || 1e-9;
-    let hit = -1, mfe = 0, mae = 0;
-    for (let k = a + 1; k <= end; k++) {
+    const hit = stopHitBar(s);
+    /* 触线之后头寸已了结：MFE/MAE 只统计到破线那根；未触线则统计到当前播放头 */
+    const upto = hit >= 0 ? hit : i;
+    let mfe = 0, mae = 0;
+    for (let k = a + 1; k <= upto; k++) {
       const c = m[k]; if (!c) break;
       const fav = (buy ? c.high - s.price : s.price - c.low) / R;
       const adv = (buy ? s.price - c.low : c.high - s.price) / R;
       if (fav > mfe) mfe = fav;
       if (-adv < mae) mae = -adv;
-      if (hit < 0 && (buy ? c.low <= s.stopPrice : c.high >= s.stopPrice)) hit = k;
     }
     const slots = end - a, fR = v => (v >= 0 ? '+' : '') + v.toFixed(1) + 'R';
-    if (hit >= 0) return { t: `结果：已止损 #${hit}（第 ${hit - a} 根，−1.0R）· 止损前 MFE ${fR(mfe)}`, c: '#f87171' };
-    const ret = (buy ? m[end].close - s.price : s.price - m[end].close) / R;
-    if (end < a + HOLD) return { t: `结果：进行中 ${slots}/${HOLD} 根 · 未触止损 · MFE ${fR(mfe)} / MAE ${fR(mae)}`, c: '#94a3b8' };
-    return { t: `结果：${HOLD} 根结束 ${fR(ret)}（#${end} 收盘）· MFE ${fR(mfe)} / MAE ${fR(mae)}`, c: ret >= 0 ? '#4ade80' : '#fbbf24' };
+    if (hit >= 0) {
+      const late = hit > a + HOLD ? `，12 根外破线` : '';
+      return { t: `结果：已止损 #${hit}（第 ${hit - a} 根${late}，−1.0R）· 止损前 MFE ${fR(mfe)}`, c: '#f87171' };
+    }
+    const ci = Math.min(i, m.length - 1), cur = m[ci];
+    const ret = (buy ? cur.close - s.price : s.price - cur.close) / R;
+    const now = `当前 ${fR(ret)}（#${ci} 收盘${end < a + HOLD ? ` · ${slots}/${HOLD} 根` : ''}）`;
+    const mark12 = end >= a + HOLD ? ` · 12 根时点 ${fR((buy ? m[end].close - s.price : s.price - m[end].close) / R)}（#${end}）` : '';
+    return { t: `结果：${ret >= 0 ? '浮盈' : '浮亏'} ${now}${mark12} · 至今未触止损 · MFE ${fR(mfe)} / MAE ${fR(mae)}`, c: ret >= 0 ? '#4ade80' : '#fbbf24' };
   };
   const annotSig = (s, no) => {
     const buy = s.side === 'buy', col = buy ? '#22d3ee' : '#f472b6', c = s.cmp;
@@ -1120,8 +1234,8 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
     const dp = s.price - s.refPrice, pct = dp / s.refPrice * 100, sp = (s.stopPrice - s.price) / s.price * 100;
     const l2 = { t: `${no ? sigTag(no) + ' ' : ''}锚定笔 #${s.gRef} 极值 ${s.refPrice.toFixed(2)} → 稳定 #${s.gConfirm}（滞后 ${lag} 根）`, c: '#94a3b8' };
     const l3 = { t: `止损 ${s.stopPrice.toFixed(2)} = 极值 ${s.refPrice.toFixed(2)} ${buy ? '−' : '+'} 0.5×ATR14 ${atr.toFixed(2)}；记账价 ${s.price.toFixed(2)}（相对极值 ${dp >= 0 ? '+' : ''}${pct.toFixed(2)}%，距记账 ${sp.toFixed(1)}%）`, c: '#94a3b8' };
-    const l4 = s.subConfirm ? { t: `次级别确认笔 ${s.subConfirm.startPrice.toFixed(2)} → ${s.subConfirm.endPrice.toFixed(2)}，稳定于极值后 +${s.subConfirm.stableAfterBars} 根（窗口 ${s.subConfirm.windowBars}）`, c: '#94a3b8' } : null;
-    const l5 = no ? sigOutcome(s) : null;   // ghost 不是"发出的信号"，不给结果
+    const l4 = s.subConfirm ? { t: `次级别确认笔 ${s.subConfirm.startPrice.toFixed(2)} → ${s.subConfirm.endPrice.toFixed(2)}（同向笔）· 极值后 +${s.subConfirm.stableAfterBars} 根次级别K线不再改动（窗口 ${s.subConfirm.windowBars}）→ 即「${s.kind} 的极值成立」`, c: '#94a3b8' } : null;
+    const l5 = no ? sigOutcomeDetail(s) : null;   // ghost 不是"发出的信号"，不给结果
     if (c && c.kind === 'div') {
       span(c.a.b0, c.a.b1, '#f59e0b'); span(c.b.b0, c.b.b1, col);
       hud([{ t: `背驰比较：进入笔 面积 ${c.a.area.toFixed(2)} → 离开笔 面积 ${c.b.area.toFixed(2)} = ${(c.b.area / c.a.area).toFixed(2)}×（阈值 0.9）`, c: col }, l2, l3, l4, l5].filter(Boolean));
@@ -1135,24 +1249,30 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
       hud([l2, l3, l4, l5].filter(Boolean));
     }
   };
-  if (L.sig) S.signals.forEach((s, si) => { if (isHot('signal', si)) annotSig(s, si + 1); });
-  if (L.ghost) S.ghosts.forEach((s, si) => {
-    const hot = (S.sel && S.sel.kind === 'signal' && S.sel.ghost && S.sel.index === si) || (FX && FX.focus.sig && FX.focus.sig.x === s);
+  if (L.sig) uniqueSig(S.signals).forEach(({ s, idx }) => { if (isHot('signal', idx)) annotSig(s, sigNo.get(idx)); });
+  if (L.ghost) uniqueSig(S.ghosts).forEach(({ s, idx }) => {
+    const hot = (S.sel && S.sel.kind === 'signal' && S.sel.ghost && S.sel.index === idx) || (FX && FX.focus.sig && FX.focus.sig.x === s);
     if (hot) annotSig(s, 0);
   });
   /* 同价止损分组：一条可见线可能压着 n 个信号的止损，标签与线尾都要说清是几个 */
+  /* 止损线横跨到哪一根：默认 +12 根；若 12 根外才被破线，延到破线那根，
+     让"线断在哪儿"和"判定止于哪儿"一致。 */
+  const stopCut = s => {
+    const hit = stopHitBar(s);
+    return hit > s.gConfirm + 12 ? Math.min(right, hit) : Math.min(right, s.gConfirm + 12);
+  };
   const stopGeom = s => {   /* 与 stopMark 同一套起止/夹取口径：只统计真正画得出来的线 */
     const x0 = X(s.gConfirm);
-    let x1 = X(Math.min(right, s.gConfirm + 12));
+    let x1 = X(stopCut(s));
     if (x1 - x0 < 40 && RGT > x0 + 8) x1 = Math.min(RGT - 2, x0 + 44);
     return (x0 > RGT || x1 < X(left)) ? null : { x0, x1 };
   };
   const stopTally = new Map();
-  if (L.stop) S.signals.forEach((s, si) => {
+  if (L.stop) uniqueSig(S.signals).forEach(({ s, idx: si }) => {
     if (s.gConfirm > i || s.stopPrice == null || !stopGeom(s)) return;
     const k = (+s.stopPrice).toFixed(2);
     let v = stopTally.get(k); if (!v) { v = { n: 0, nos: [], maxNo: 0 }; stopTally.set(k, v); }
-    v.n++; v.nos.push(si + 1); v.maxNo = si + 1;
+    v.n++; const nn = sigNo.get(si); v.nos.push(nn); v.maxNo = nn;
   });
   const stopLabels = [];   // 先画完所有线/尺/×n，再统一画标签，避免后画的同价止损线横穿前面的标签
   const stopMark = (s, ghost, idx) => {
@@ -1161,16 +1281,17 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
     const geo = stopGeom(s); if (!geo) return;
     const x0 = geo.x0, x1 = geo.x1;
     const y = Y(s.stopPrice), yp = Y(s.price), buy = s.side === 'buy', col = ghost ? '#94a3b8' : '#ff9f0a';
-    const endBar = Math.min(right, s.gConfirm + 12), atRight = x1 >= RGT - 2 || endBar >= right;
-    const no = ghost ? 0 : idx + 1, grp = ghost ? null : stopTally.get((+s.stopPrice).toFixed(2));
+    const endBar = stopCut(s), hitBar = stopHitBar(s), atRight = x1 >= RGT - 2 || endBar >= right;
+    const no = ghost ? 0 : sigNo.get(idx), grp = ghost ? null : stopTally.get((+s.stopPrice).toFixed(2));
     const nOver = grp ? grp.n : 0;
     const pct = (s.stopPrice - s.price) / s.price * 100, atr = Math.abs(s.refPrice - s.stopPrice) * 2;
     const pctTxt = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
     line(x0 - 3, yp, x0 + 3, yp, col + 'aa', 1);                    // 幅度尺上端 = 记账价
     line(x0 - 3, y, x0 + 3, y, col + 'aa', 1);                      // 幅度尺下端 = 止损价
     line(x0, yp, x0, y, col + '88', 1, [2, 4]);                     // 记账价 → 止损：这笔的风险幅度
-    line(x0, y, x1, y, col, ghost ? 1 : 1.4, [4, 4]);               // 止损价：从记账那根起向右延伸
-    g.fillStyle = col; g.beginPath(); g.arc(x1, y, 2, 0, 6.3); g.fill();
+    const stopCol = (!ghost && hitBar >= 0) ? '#f87171' : col;       // 被破线：止损线整条转红，线头就停在破线那根
+    line(x0, y, x1, y, stopCol, ghost ? 1 : 1.4, [4, 4]);           // 止损价：从记账那根起向右延伸
+    g.fillStyle = stopCol; g.beginPath(); g.arc(x1, y, 2, 0, 6.3); g.fill();
     /* 幅度百分比：竖排贴在这条竖线左侧，直接说明"这段竖线有多深"；竖线太短（<30px）时不硬挤 */
     const ruler = !ghost && Math.abs(yp - y) >= 30;
     if (ruler) {
@@ -1201,7 +1322,8 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
     const pctS = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
     const l1 = (no ? sigTag(no) + ' ' : '') + s.kind + ' 止损 ' + stopS + '（' + pctS + '）' + (nOver > 1 ? ' ×' + nOver : '');
     const l2 = '极' + refS + (buy ? ' − ' : ' + ') + '0.5×ATR ' + atr.toFixed(2) + ' = ' + stopS;
-    const l3 = '起 #' + s.gConfirm + ' 记账根 → ' + (atRight ? '止 右缘' : '止 #' + endBar + '（+' + (endBar - s.gConfirm) + '根）');
+    const l3 = '起 #' + s.gConfirm + ' 记账根 → ' + (atRight ? '止 右缘' : '止 #' + endBar +
+      (hitBar > s.gConfirm + 12 ? '（12 根外破线）' : '（+' + (endBar - s.gConfirm) + ' 根）'));
     const p3 = (+s.price).toFixed(3);   // 3 位小数：让算式本身能算出同一结果（2 位会在 -2.28/-2.29 上打架）
     const l4 = '幅度 (' + (+s.stopPrice).toFixed(3) + ' − ' + p3 + ') / ' + p3 + ' = ' + pctS;
     const f1 = 'bold 10px -apple-system, "PingFang SC", system-ui', f2 = '9px -apple-system, "PingFang SC", system-ui', f3 = '9px -apple-system, "PingFang SC", system-ui';
@@ -1234,8 +1356,8 @@ function drawMainLayers(g, m, i, r, off, L, left, right, bw, X, Y, vis, line, tx
     });
   };
   if (L.stop) {
-    S.signals.forEach((s, si) => stopMark(s, false, si));
-    S.ghosts.forEach((s, si) => stopMark(s, true, si));
+    uniqueSig(S.signals).forEach(({ s, idx }) => stopMark(s, false, idx));
+    uniqueSig(S.ghosts).forEach(({ s, idx }) => stopMark(s, true, idx));
     stopLabels.forEach(fn => fn());
   }
 }
@@ -1248,7 +1370,7 @@ function pick(px, py) {
   const d2 = (x1, y1, x2, y2) => { const dx = x2 - x1, dy = y2 - y1; const L = dx * dx + dy * dy || 1; let u = ((px - x1) * dx + (py - y1) * dy) / L; u = Math.max(0, Math.min(1, u)); return Math.hypot(px - (x1 + u * dx), py - (y1 + u * dy)); };
   let best = null;
   const consider = (d, sel, lim) => { if (d <= lim && (!best || d < best.d)) best = { d, sel }; };
-  const scanSig = (list, ghost) => list.forEach((s, idx) => { if (s.gConfirm > i) return; consider(Math.hypot(px - X(s.gConfirm), py - Y(s.price)), { kind: 'signal', index: idx, ghost }, 13); });
+  const scanSig = (list, ghost) => uniqueSig(list).forEach(({ s, idx }) => { if (s.gConfirm > i) return; consider(Math.hypot(px - X(s.gConfirm), py - Y(s.price)), { kind: 'signal', index: idx, ghost }, 13); });
   if (S.layers.sig) scanSig(S.signals, false);
   if (S.layers.ghost) scanSig(S.ghosts, true);
   if (best) return best.sel;
@@ -1296,7 +1418,7 @@ const HELP = `
 <div class="sec">噪声系统（冻结完美行情 → 逐步污染）</div>
 <div class="blk m" style="line-height:1.8">完美行情（本级别 + 次级别）由分支流程构造出来后即被<b>冻结</b>：噪声参数只在它的每一根K线上做逐根变换，<b>不会改动完美行情本身</b>，K线根数与下标不变。<b>污染强度 ε</b> 是主轴（0 = 完美，1 ≈ 接近真实，待校准）；同一批随机数只乘以 ε，拖动时同一根K线是连续变形的。四个算子可单独拉：<b>影线外延</b>（高低点外扩，制造假分型 / 破坏包含）· <b>收盘游走</b>（均值回归的整根偏移 + 开盘贴近前收）· <b>制造包含</b>（把一根K线压进前一根的范围，强度连续）· <b>毛刺跳跃</b>（偶发长针，向下更常见）。污染先作用在次级别K线，本级别K线再由污染后的次级别聚合，两级始终一致。ε &gt; 0 时主图与次级别副图都分成上下两屏：上屏完美、下屏污染。右栏「对比」里的<b>临界点扫描</b>列出每个结构质变（笔被合并 / 劈开、中枢合并、包含激增、信号消失）第一次出现的 ε。稳健度记分卡：结构结论在污染下的存活 / 命中比例（<b>不是盈利胜率</b>），综合总分 = 信号 35% + 笔 25% + 中枢 25% + 分型 15% 加权，某项无数据时按剩余项归一。导入的真实行情不加噪声。</div>
 <div class="sec">级别与确认口径</div>
-<div class="blk m" style="line-height:1.8">每 <b>次级别倍数</b> 根次级别K线聚合为 1 根本级别K线，次级别确认在更细级别上判断。<b>无未来函数</b>：任何结构只用「截至当前K线」可知的信息判定——分型的三角是发生位置、圆点是确认时点；信号表里的「延迟」就是从发生到可知的距离。<b>Ghost（空心三角）</b>：结构上成立但被过滤的信号（暖机隔离 / 次级别未确认 / 不可交易），如实展示不隐藏。<b>回放窗口</b>：源码回填要凑满 700 根才开始出结论；本实验室从案例起点用扩展窗口逐帧复算（窗口随K线增长，默认上限 700 根），所以极早期几帧是「窗口尚短」的结果，与 C# 回填在同一根K线上可能不同。</div>
+<div class="blk m" style="line-height:1.8">每 <b>次级别倍数</b> 根次级别K线聚合为 1 根本级别K线，次级别确认在更细级别上判断。<b>无未来函数</b>：任何结构只用「截至当前K线」可知的信息判定——分型的三角是发生位置、圆点是确认时点；信号表里的「延迟」就是从发生到可知的距离。<b>确认笔</b>：副图白色粗线，就是「某一号买卖点的次级别确认笔」。判据不是笔身落在窗口内，而是这笔的<b>稳定点</b>（白点，标「稳定」）落在「结构极值 → 记账根」这段窗口里、且不超过极值后 30 根次级别K线——笔可以更早发生，所以它会跑到窗口左边（那一段画成虚线，标「窗口前」）。它是信号发出前的第三道闸门（暖机 → 次级别确认 → 可交易）。<b>Ghost（空心三角）</b>：结构上成立但被过滤的信号（暖机隔离 / 次级别未确认 / 不可交易），如实展示不隐藏。<b>回放窗口</b>：源码回填要凑满 700 根才开始出结论；本实验室从案例起点用扩展窗口逐帧复算（窗口随K线增长，默认上限 700 根），所以极早期几帧是「窗口尚短」的结果，与 C# 回填在同一根K线上可能不同。</div>
 <div class="blk m" style="line-height:1.8;margin-top:6px">数据依赖（与上游 C# 一致）：<b>本级别</b>是必需输入——包含、分型、笔、中枢、背驰、买卖点都只用它；<b>次级别</b>只用于买卖点确认（次级别须在参考点后及时走出同向一笔），可关闭；<b>高周期</b>只用于「共振」标签（源码自述无统计优势、不参与过滤），本实验室未接入。三级别中枢叠加只是「时间 + 价格区间相交」的周期近似，不是级别递归。<br><b>单级别数据（如上传的 CSV）</b>：没有次级别 → 次级别确认自动关闭并禁用，结构上成立、原本会被「次级别未确认」过滤的点会直接成为信号（暖机 / 不可交易仍生效），所以信号数通常比内置的双级别案例多；次级别副图也不会出现。</div>
 <div class="sec">右栏页签</div>
 <div class="blk m" style="line-height:1.8">实时＝本根K线触发的事件与近期结构事件 · 显微镜＝当前案例全部结构的索引（绿＝已稳定 / 已离开，黄＝未稳定 / 未离开，灰＝被过滤 / 暖机，红 / 绿＝顶 / 底分型） · 对比＝基线 vs 污染账单 + 记分卡（仅污染&gt;0 时出现）。点任意条目或画布结构 → 悬浮显微镜卡片（生成 / 原理）。图层开关在画布右上角「图层」；能力对照在本说明末尾。</div>
@@ -1374,17 +1496,28 @@ function renderRight() {
     const off = s.off, r2 = s.res;
     const recent = (arr, n) => { const cut = arr.length > n ? arr.slice(arr.length - n) : arr; const base = arr.length - cut.length; return cut.map((x, k) => ({ x, i: base + k })); };
     const chip = (id, sel, label, col) => `<a class="mxchip" data-open="${id}" data-k="${sel.kind}" data-i="${sel.index}"${sel.ghost ? ' data-g="1"' : ''}${col ? ` style="background:${col}22;color:${col};border-color:${col}66"` : ''}>${label}</a>`;
-    const grp = (name, list) => list.length ? `<div class="sec">${name} · ${list.length}</div><div class="mxchips">${list.join('')}</div>` : '';
-    const fr = recent(r2.fractals || [], 60).map(({ x: f, i }) => chip(f.isTop ? 'fractal-top' : 'fractal-bottom', { kind: 'fractal', index: i }, `${f.isTop ? '顶' : '底'} @#${f.barIndex + off}`, f.isTop ? KLINE_COL.down : KLINE_COL.up));
-    const st = (r2.strokes || []).map((k, i) => chip('stroke', { kind: 'stroke', index: i }, `${k.isUp ? '↑' : '↓'} #${k.startBarIndex + off}→#${k.endBarIndex + off}${k.isConfirmed ? ' ·已稳定' : ' ·未稳定'}`, k.isConfirmed ? '#a3e635' : '#facc15'));
-    const pv = (r2.pivots || []).map((p, i) => chip('pivot', { kind: 'pivot', index: i }, `#${p.startStrokeIndex}–#${p.endStrokeIndex}笔 ${fm(p.zd)}–${fm(p.zg)}${p.isConfirmed ? ' ·已离开' : ' ·未离开'}`, p.isConfirmed ? '#58a6ff' : '#f59e0b'));
-    const dv = (r2.divergences || []).map((d, i) => { const sk = (r2.strokes || [])[d.leaveIndex]; return chip('divergence', { kind: 'div', index: i }, `${d.isUp ? '顶' : '底'}背驰 @#${sk ? sk.endBarIndex + off : '?'} · 比${(+d.areaRatio).toFixed(2)}${d.warmup ? ' ·暖机' : ''}`, d.warmup ? '#94a3b8' : '#e879f9'); });
+    /* 排序口径（2026-11-07）：两层都「最新在前」——
+       ① 组内：按该结构在全局K线上的时点倒序，与「实时」页签的近期事件流同向；
+       ② 组间：按该组内最新一条的时点降序（活跃结构先出），时点相同时保持兜底顺序；
+       点击跳转用的 data-k / data-i 都是原数组下标，排序不改语义。 */
+    const newest = list => list.sort((a, b) => b.t - a.t);
+    const grp = (name, list) => list.length ? `<div class="sec">${name} · ${list.length}</div><div class="mxchips">${list.map(e => e.html).join('')}</div>` : '';
+    const stEnd = i => { const k = (r2.strokes || [])[i]; return k ? k.endBarIndex : -1; };
+    const fr = newest(recent(r2.fractals || [], 60).map(({ x: f, i }) => ({ t: f.barIndex, html: chip(f.isTop ? 'fractal-top' : 'fractal-bottom', { kind: 'fractal', index: i }, `${f.isTop ? '顶' : '底'} @#${f.barIndex + off}`, f.isTop ? KLINE_COL.down : KLINE_COL.up) })));
+    const st = newest((r2.strokes || []).map((k, i) => ({ t: k.endBarIndex, html: chip('stroke', { kind: 'stroke', index: i }, `${k.isUp ? '↑' : '↓'} #${k.startBarIndex + off}→#${k.endBarIndex + off}${k.isConfirmed ? ' ·已稳定' : ' ·未稳定'}`, k.isConfirmed ? '#a3e635' : '#facc15') })));
+    const pv = newest((r2.pivots || []).map((p, i) => ({ t: stEnd(p.endStrokeIndex), html: chip('pivot', { kind: 'pivot', index: i }, `#${p.startStrokeIndex}–#${p.endStrokeIndex}笔 ${fm(p.zd)}–${fm(p.zg)}${p.isConfirmed ? ' ·已离开' : ' ·未离开'}`, p.isConfirmed ? '#58a6ff' : '#f59e0b') })));
+    const dv = newest((r2.divergences || []).map((d, i) => ({ t: stEnd(d.leaveIndex), html: chip('divergence', { kind: 'div', index: i }, `${d.isUp ? '顶' : '底'}背驰 @#${stEnd(d.leaveIndex) >= 0 ? stEnd(d.leaveIndex) + off : '?'} · 比${(+d.areaRatio).toFixed(2)}${d.warmup ? ' ·暖机' : ''}`, d.warmup ? '#94a3b8' : '#e879f9') })));
     const upTo = arr => arr.map((x, i) => ({ x, i })).filter(({ x }) => x.gConfirm <= S.i);
-    const sg = upTo(S.signals).map(({ x, i }) => chip(itemForSel({ kind: 'signal', index: i }), { kind: 'signal', index: i }, `${x.kind} @#${x.gRef} → 确认@#${x.gConfirm}`, '#22d3ee'));
-    const gh = upTo(S.ghosts).map(({ x, i }) => chip(itemForSel({ kind: 'signal', index: i, ghost: true }), { kind: 'signal', index: i, ghost: true }, `${x.kind} · ${({ warmup: '暖机', sublevel: '次级别未确认', untradable: '不可交易' })[x.reason] || x.reason} @#${x.gRef}`, '#94a3b8'));
-    const mg = recent(r2.merged || [], 40).map(({ x: m, i }) => chip('merge', { kind: 'merged', index: i }, m.startIndex === m.endIndex ? `@#${m.startIndex + off}` : `#${m.startIndex + off}–#${m.endIndex + off}`));
-    h += `<div class="blk m">当前案例中可点开悬浮详情的全部结构，点击即打开悬浮显微镜卡片（默认「生成」态，可切「原理」）。颜色：<span style="color:${KLINE_COL.up}">绿</span>＝涨 / 底分型 · <span style="color:${KLINE_COL.down}">红</span>＝跌 / 顶分型 · <span style="color:#a3e635">黄绿</span>＝已稳定 / 已离开 · <span style="color:#facc15">黄</span>＝未稳定 / 未离开（仍可能被修正） · <span style="color:#94a3b8">灰</span>＝被过滤 / 暖机 / 中性。</div>`;
-    h += grp('买卖点（已发出）', sg) + grp('被过滤（结构成立未发出）', gh) + grp('背驰', dv) + grp('中枢', pv) + grp('笔', st) + grp('分型（仅最近）', fr) + grp('包含合并K线（仅最近）', mg);
+    const sg = newest(upTo(S.signals).map(({ x, i }) => ({ t: x.gConfirm, html: chip(itemForSel({ kind: 'signal', index: i }), { kind: 'signal', index: i }, `${x.kind} @#${x.gRef} → 确认@#${x.gConfirm}`, '#22d3ee') })));
+    const gh = newest(upTo(S.ghosts).map(({ x, i }) => ({ t: x.gConfirm, html: chip(itemForSel({ kind: 'signal', index: i, ghost: true }), { kind: 'signal', index: i, ghost: true }, `${x.kind} · ${({ warmup: '暖机', sublevel: '次级别未确认', untradable: '不可交易' })[x.reason] || x.reason} @#${x.gRef}`, '#94a3b8') })));
+    const mg = newest(recent(r2.merged || [], 40).map(({ x: m, i }) => ({ t: m.endIndex, html: chip('merge', { kind: 'merged', index: i }, m.startIndex === m.endIndex ? `@#${m.startIndex + off}` : `#${m.startIndex + off}–#${m.endIndex + off}`) })));
+    h += `<div class="blk m">当前案例中可点开悬浮详情的全部结构，点击即打开悬浮显微镜卡片（默认「生成」态，可切「原理」）。组与组之间也按「最近形成的结构」排序，越靠前越活跃。颜色：<span style="color:${KLINE_COL.up}">绿</span>＝涨 / 底分型 · <span style="color:${KLINE_COL.down}">红</span>＝跌 / 顶分型 · <span style="color:#a3e635">黄绿</span>＝已稳定 / 已离开 · <span style="color:#facc15">黄</span>＝未稳定 / 未离开（仍可能被修正） · <span style="color:#94a3b8">灰</span>＝被过滤 / 暖机 / 中性。</div>`;
+    /* 组间活跃度：取每组最新一条（已倒序，[0] 即最新）的时点比较；Array.sort 稳定，等值仍按兜底顺序 */
+    const groups = [
+      ['买卖点（已发出）', sg], ['被过滤（结构成立未发出）', gh], ['背驰', dv], ['中枢', pv],
+      ['笔', st], ['分型（仅最近）', fr], ['包含合并K线（仅最近）', mg],
+    ].filter(g => g[1].length).sort((a, b) => b[1][0].t - a[1][0].t);
+    h += groups.map(g => grp(g[0], g[1])).join('');
     h += `<div class="sec">当前K线</div><div class="mxchips"><a class="mxchip" data-open="raw">原始K线 @#${S.i}</a></div>`;
   } else if (S.tab === 'diff') {
     if (!hasBase()) {
@@ -1590,8 +1723,19 @@ function renderState() {
   gbCompute();
   const st = S.cs && S.snaps.length ? ST.track(S.snaps, S.i, S.signals, S.ghosts) : null;
   S.st = st;
-  /* 头部只放三台机器的当前状态名；定义与条件由悬停节点 / 边的详情承载 */
+  /* 头部只放三台机器的当前状态名；定义与条件由悬停节点 / 边的详情承载。
+     右侧再挂一条「最近事件」：当前实例总是最新的待定，结论只闪一帧，这里留个回看入口。 */
+  const ev = st ? ST.recent(S.snaps, S.i, S.signals, S.ghosts) : null;
+  const evMain = ev ? (ev.sig || ev.st) : null;
+  const evSub = ev && ev.sig && ev.st && ev.st.f > ev.sig.f ? ev.st : null;
+  const evCol = t => t === 'ok' ? 'var(--ok)' : t === 'no' ? 'var(--bad)' : 'var(--warn)';
+  const evHtml = !evMain ? '<span class="stev none">最近事件 <b>尚无结论</b></span>'
+    : `<span class="stev" data-f="${evMain.f}" title="点击跳回 #${evMain.f}">最近事件 <b style="color:${evCol(evMain.tone)}">${evMain.text}</b>`
+      + ` <i>${evMain.f === S.i ? '本帧' : `+${S.i - evMain.f} 根`}</i>`
+      + (evSub ? ` <span class="sub">· 之后 ${evSub.text} @#${evSub.f}</span>` : '') + '</span>';
   $('#stcur').innerHTML = st ? ST.LAYOUT.order.map(m => `<span class="pill">${ST.MACHINES[m].title} <b>${stCur(m, st[m])}</b></span>`).join('') : '';
+  $('#stev').innerHTML = st ? evHtml : '';
+  $('#stevrow').classList.toggle('hide', !st);
   for (const m of ST.LAYOUT.order) {
     const info = st ? st[m] : { cur: null, path: [], legal: [] };
     const walked = new Set(info.path);
@@ -2051,6 +2195,22 @@ const subFoldPref = () => { try { return localStorage.getItem('chanlab.subfold')
 function setSubFold(fold, persist) { S.subFold = fold; if (persist) { try { localStorage.setItem('chanlab.subfold', fold ? '1' : '0'); } catch (e) {} } draw(); }
 const cvFoldPref = () => { try { return localStorage.getItem('chanlab.cvfold') === '1'; } catch (e) { return false; } }; /* 默认展开；手动折叠后才记 '1' */
 function setCvFold(fold, persist) { S.cvFold = fold; if (persist) { try { localStorage.setItem('chanlab.cvfold', fold ? '1' : '0'); } catch (e) {} } draw(); }
+/* K线图表整组折叠：与状态网络 / 分支流程同级；组内主 / 次标题条仍各自折叠 */
+const kFoldPref = () => { try { return localStorage.getItem('chanlab.kfold') === '1'; } catch (e) { return false; } }; /* 默认展开；手动折叠后才记 '1' */
+function setKlineFold(fold, persist, redraw = true) {
+  const cw = $('#chartwrap'); if (!cw) return;
+  cw.classList.toggle('kfolded', fold);
+  const t = $('#klinetitle'); if (t) t.textContent = (fold ? '▸' : '▾') + ' K线图表';
+  const h = $('#klinehint'); if (h) h.textContent = fold ? '已折叠，点击标题展开' : '主级别 + 次级别';
+  if (persist) { try { localStorage.setItem('chanlab.kfold', fold ? '1' : '0'); } catch (e) {} }
+  if (redraw && !fold) draw();   /* 展开时画布刚从 display:none 恢复，补一次尺寸与绘制 */
+}
+/* 两条都折叠（或没有次级别可看）时收起整个画布容器，避免残留大块黑区 */
+function syncChartFold() {
+  const cw = $('#chartwrap'), sub = $('#subwrap');
+  if (!cw || !sub) return;
+  cw.classList.toggle('allfolded', !!(S.cvFold && (S.subFold || sub.hidden)));
+}
 /* 主图 / 副图分界：拖动分配高度；按占两图总高的比例记忆，窗口变化时重新夹取 */
 const SPLIT_MIN_SUB = 90, SPLIT_MIN_MAIN = 120;
 const subFracPref = () => { try { const v = parseFloat(localStorage.getItem('chanlab.subfrac')); return v > 0.03 && v < 0.97 ? v : null; } catch (e) { return null; } };
@@ -2128,15 +2288,15 @@ function bindSplitter() {
     } else if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); resetSubH(); }
   });
 }
-/* 主图全屏：优先原生全屏；不支持元素级全屏的浏览器（如 iPhone Safari）退回页面内铺满 */
+/* 主图 + 次级别副图整组全屏：优先原生全屏；不支持元素级全屏的浏览器（如 iPhone Safari）退回页面内铺满 */
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
-const cvIsFs = () => { const el = $('#cvwrap'); return fsEl() === el || el.classList.contains('fs-css'); };
+const cvIsFs = () => { const el = $('#chartwrap'); return fsEl() === el || el.classList.contains('fs-css'); };
 function syncFsBtn() {
   const on = cvIsFs(), b = $('#fsbtn');
   if (!b) return;
   b.textContent = on ? '退出' : '全屏';
-  b.dataset.tip = on ? '退出全屏（Esc）' : '全屏查看主图（Esc 退出）';
-  b.setAttribute('aria-label', on ? '退出全屏' : '全屏查看主图');
+  b.dataset.tip = on ? '退出全屏（Esc）' : '全屏查看主图与次级别（Esc 退出）';
+  b.setAttribute('aria-label', on ? '退出全屏' : '全屏查看主图与次级别');
 }
 /* Safari 全屏是动画：fullscreenchange 时尺寸可能尚未落定，分几拍补画，避免画布停在中间态 */
 function drawFsSettled() {
@@ -2149,13 +2309,13 @@ function drawFsSettled() {
   setTimeout(() => draw(), 420);
 }
 function setCssFs(on) {
-  $('#cvwrap').classList.toggle('fs-css', on);
+  $('#chartwrap').classList.toggle('fs-css', on);
   document.body.classList.toggle('fs-open', on);
   syncFsBtn();
   drawFsSettled();
 }
 function toggleCvFs() {
-  const el = $('#cvwrap');
+  const el = $('#chartwrap');
   if (cvIsFs()) {
     if (fsEl() === el) {
       const exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -2163,7 +2323,10 @@ function toggleCvFs() {
     } else setCssFs(false);
     return;
   }
-  if (S.cvFold) setCvFold(false, false);
+  /* 组标题在全屏里隐藏；若整组被折叠，先展开，避免进全屏只剩标题条 */
+  if ($('#chartwrap').classList.contains('kfolded')) setKlineFold(false, false);
+  /* 主图折叠着进全屏时保留折叠，让次级别独占；只有次级别不可用才展开主图，避免整屏空白 */
+  if (S.cvFold && $('#subwrap').hidden) setCvFold(false, false);
   const req = el.requestFullscreen || el.webkitRequestFullscreen;
   if (!req) { setCssFs(true); return; }
   let p;
@@ -2184,7 +2347,7 @@ function setView(v) {
   if (!exp && MX.isOpen()) MX.close();
   if (S.view === 'chart' && !exp && !mobile) S.chartPanes = [app.classList.contains('hide-l'), app.classList.contains('hide-r')];
   S.view = v; app.dataset.mode = v;
-  $('#cvwrap').hidden = !exp; $('#player').hidden = !exp; if (!exp) $('#subwrap').hidden = true;
+  $('#cvwrap').hidden = !exp; $('#player').hidden = !exp; $('#chartwrap').hidden = !exp; if (!exp) $('#subwrap').hidden = true;
   $('#mapwrap').hidden = !map; $('#statewrap').hidden = !exp; $('#gbwrap').hidden = !exp;
   $('#pane-exp').hidden = !exp;   /* 学习模式无左栏：概念入口全在关系地图节点 */
   const hl = mobile ? true : (exp ? (S.chartPanes ? S.chartPanes[0] : false) : true), hr = mobile ? true : (exp ? (S.chartPanes ? S.chartPanes[1] : true) : true);
@@ -2480,16 +2643,19 @@ function init() {
   /* 状态面板折叠：点击标题切换（独立按钮已并入标题），状态记入 localStorage，下次打开保持 */
   $('#sttitle').onclick = () => setStFold(!$('#stbody').classList.contains('hide'), S.view === 'chart');
   $('#gbftitle').onclick = () => setGbFold(!$('#gbwrap').classList.contains('folded'), S.view === 'chart');
+  /* K线图表整组折叠：标题条与状态网络 / 分支流程同级，组内主 / 次仍可各自折叠 */
+  $('#klinetitle').onclick = () => setKlineFold(!$('#chartwrap').classList.contains('kfolded'), S.view === 'chart');
   S.gbUnit = gbUnitPref();
   syncGbUnitUI();
   if ($('#gbunit')) $('#gbunit').addEventListener('change', e => setGbUnit(e.target.value));
   setStFold(stFoldPref(), false);
+  setKlineFold(kFoldPref(), false, false);
   /* 次级别副图折叠：点击标题条切换（与状态机面板同口径），状态记入 localStorage，下次打开保持 */
   $('#subbar').onclick = () => setSubFold(!S.subFold, true);
   setSubFold(subFoldPref(), false);
   bindSplitter();
-  /* 本级别主图折叠：与次级别副图同口径；全屏时标题条不折叠 */
-  $('#cvbar').onclick = () => { if (!cvIsFs()) setCvFold(!S.cvFold, true); };
+  /* 本级别主图折叠：与次级别副图同口径；全屏里同样可折叠，把高度让给次级别 */
+  $('#cvbar').onclick = () => setCvFold(!S.cvFold, true);
   setCvFold(cvFoldPref(), false);
   /* 主图全屏 */
   $('#fsbtn').onclick = () => toggleCvFs();
@@ -2498,8 +2664,12 @@ function init() {
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', () => { if (cvIsFs()) drawFsSettled(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#cvwrap').classList.contains('fs-css')) setCssFs(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#chartwrap').classList.contains('fs-css')) setCssFs(false); });
   $('#streset').onclick = () => { STW.vb = { x: 0, y: 0, w: ST.LAYOUT.vb[0], h: ST.LAYOUT.vb[1] }; applyStView(); };
+  $('#stevrow').onclick = e => {
+    const c = e.target.closest('.stev[data-f]');
+    if (c) go(+c.dataset.f);
+  };
   /* 结构关系地图（V0.2） */
   document.querySelectorAll('#vtabs button').forEach(b => { b.onclick = () => setView(b.dataset.v); });
   $('#rmreset').onclick = rmReset;

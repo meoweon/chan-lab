@@ -280,7 +280,7 @@ function checkDivergence(strokes, pivot, hist, thr) {
 }
 
 /* ───────────────────────── 次级别确认 ───────────────────────── */
-function subLevelMatches(subCandles, subStrokes, refTime, acctTime, side, windowBars, strict) {
+function subLevelMatches(subCandles, subStrokes, refTime, acctTime, side, windowBars) {
   let barSeconds = 0;
   if (subCandles.length >= 2) barSeconds = Math.max(1, subCandles[1].time - subCandles[0].time);
   const deadline = windowBars > 0 && barSeconds > 0 ? refTime + windowBars * barSeconds : acctTime;
@@ -290,7 +290,6 @@ function subLevelMatches(subCandles, subStrokes, refTime, acctTime, side, window
     if (bar < 0 || bar >= subCandles.length) continue;
     const t = subCandles[bar].time;
     if (t < refTime || t > acctTime || t > deadline) continue;
-    if (strict && (s.endBarIndex == null || subCandles[s.endBarIndex].time < refTime)) continue;   // 严格：确认笔必须在参考点之后完成
     if (side === 'buy' ? s.isUp : !s.isUp) return s;
   }
   return null;
@@ -499,7 +498,6 @@ function replay(main, sub, userOpts) {
   const o = { ...DEFAULT_OPTIONS, ...userOpts };
   const W = Math.max(120, o.analysisBars);
   const snaps = [], signals = [], ghosts = [];
-  const seenSig = new Map();   // kind|side|锚定笔 → 1=已按真实信号记过 / 0=已按 ghost 记过
   let subEnd = 0;
 
   for (let i = 0; i < main.length; i++) {
@@ -530,22 +528,16 @@ function replay(main, sub, userOpts) {
       if (reason) s.reason = reason;
       return s;
     };
-    /* 同一结构（kind|side|锚定笔）只记一次：稳定时点会随 pts[ssi+3] 被替换而后移，
-       早期实现会在每个新时点把同一笔重发一遍，图上就出现“两个二买、同一个极值”。 */
-    const seenKey = p => p.kind + '|' + p.side + '|' + (p.referenceBarIndex + off);
+    /* 与 ChanBackfill.ReplayPoints 完全一致：**不做跨帧去重**。
+       锚定笔的稳定时点会随 pts[ssi+3] 被替换而后移，mdk 会把同一结构在新时点再发一次
+       （记账价随当根收盘微调）；lab 照发，去重只在绘制层做。 */
     const sig = [], gh = [];
     for (const p of r.points) {
       if (p.time !== barTime) continue;
-      const k = seenKey(p);
-      if (seenSig.get(k) === 1) continue;        // 已经按真实信号记过；ghost→real 允许升级
-      seenSig.set(k, 1);
       sig.push(conv(p));
     }
     for (const p of r.ghosts) {
       if (p.time !== barTime) continue;
-      const k = seenKey(p);
-      if (seenSig.has(k)) continue;              // real / ghost 都只保留最早一次
-      seenSig.set(k, 0);
       gh.push(conv(p, p.reason));
     }
     signals.push(...sig);
