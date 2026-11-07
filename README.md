@@ -1,0 +1,98 @@
+# 缠论动态理论实验室
+
+Chan Theory Dynamic Simulator — 可视化交互的缠论结构生成与验证工具
+
+## 项目目标
+
+把缠论构造成一个理想的、完整的、动态数学世界，通过可视化与交互，直观理解：
+
+- 结构如何产生（包含处理 → 分型 → 笔 → 线段 → 中枢 → 买卖点）
+- 彼此有什么关系（级别递归、背驰比较）
+- 有哪些状态、如何转化（走势类型分类、三买卖点判定）
+- 后续有哪些可能的发展路径（路径驱动生成）
+
+这不是交易软件，不是回测系统，而是理解缠论理论的"几何学圆模型"。
+
+## 快速开始
+
+```bash
+# 构建（生成 chan-lab.html）
+python3 build.py
+
+# 或双击 build.command（macOS）
+# 然后在浏览器打开 chan-lab.html
+```
+
+## 目录结构
+
+```
+chan-lab/
+├── src/                    核心运行时
+│   ├── chan-engine.js      结构引擎（分型/笔/线段/中枢/买卖点）
+│   ├── chan-rules.js       规则层（背驰/级别/走势类型）
+│   ├── chan-state.js       状态管理
+│   ├── chan-generator.js   路径驱动生成器
+│   ├── chan-robust.js      鲁棒性验证
+│   ├── chan-noise.js       噪声对照
+│   ├── chan-microscope.js  微观分析
+│   ├── chan-csv.js         CSV 数据加载
+│   └── app.js              应用入口
+├── scripts/                CLI 工具集
+│   ├── test-branch-units.js   13 项探针测试
+│   ├── structure-census.js    结构普查
+│   ├── stylized-facts.js      风格化特征统计
+│   └── ...                    其他验证脚本
+├── docs/                   文档与报告
+├── reference/              上游参考源（不入库）
+│   ├── mdk/                C# 实现
+│   ├── chan/               Go 实现
+│   ├── chan-core/          Rust 实现
+│   └── chan-cj/            仓颉实现
+├── build.py                构建脚本
+├── index.template.html     HTML 模板
+└── chan-lab.html           构建产物（gitignore）
+```
+
+## 核心特性
+
+### 结构链完整实现
+
+包含处理 → 分型 → 笔 → 线段 → 中枢 → 背驰 → 买卖点，严格遵循无未来函数原则：信号记账于结构确认之 K 线，窗口不变性可验证。
+
+### 路径驱动生成
+
+二叉完全分类流程带：给定路径即可复现完整结构演化，支持同源基线对照。
+
+### 噪声验证
+
+D 层真实行情 + 合成数据对照，置换检验统计显著性。
+
+### 口径显式
+
+流派分歧（新笔/老笔、线段破坏情形、终点取法）择一实现，以回归用例锁定。
+
+## 技术栈
+
+- **运行时**：纯 JavaScript，零依赖，单 HTML 文件交付
+- **构建**：Python 3（仅用于拼接，非必需）
+- **参考源**：C# / Go / Rust / 仓颉（仅用于移植对照，不入库）
+
+## 上游致谢
+
+本项目算法参考自以下开源实现：
+
+- [bambuo/mdk](https://github.com/bambuo) — C# 实现，缠论结构链完整
+- [bambuo/chan](https://github.com/bambuo) — Go 实现
+- chan-core — Rust 实现（私有仓库，群内分发）
+- chan-cj — 仓颉实现
+
+## 许可证
+
+本项目代码为原创部分，采用 MIT 许可证。
+
+上游参考源（`reference/` 目录，不入库）遵循各自原许可证。
+
+## 相关链接
+
+- [chan.py (Vespa314)](https://github.com/waditu/chan.py) — Python 缠论框架，2300+ Stars
+- [缠论量化实战知识库](https://www.meowsite.com) — 群聊沉淀与案例整理
